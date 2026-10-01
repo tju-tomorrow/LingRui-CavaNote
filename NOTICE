@@ -1,0 +1,36 @@
+# NOTICE — 第三方组件声明
+
+LingRui Scribe
+Copyright (C) 2026 LingRui Scribe contributors
+
+This program is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+
+本产品包含来自以下开源项目的代码 / 依赖，在此按其原始 license 声明：
+
+## 直接 fork（见 VENDOR.md）
+
+| 项目 | License | 版权 |
+|---|---|---|
+| BlockNote | MPL-2.0（`packages/xl-*` 为 GPL-3.0） | © TypeCellOS |
+| Excalidraw | MIT | © 2020 Excalidraw |
+| assistant-ui | MIT | © 2026 AgentbaseAI Inc. |
+| xyflow (React Flow) | MIT | © xyflow |
+
+## 依赖
+
+| 项目 | License | 用途 |
+|---|---|---|
+| Yjs | MIT | CRDT |
+| Hocuspocus | MIT | 协同后端 |
+| Vercel AI SDK | Apache-2.0 | LLM 流式 / tool calling |
+| PixiJS | MIT | WebGL 实时渲染 |
+| three.js | MIT | 3D |
+| @pixiv/three-vrm | MIT | VRM 动漫角色 |
+| Rive (`@rive-app/*`) | MIT | 状态机动画 |
+| anime.js | MIT | 补间 |
+| Orama | Apache-2.0 | 全文搜索 |
+| Revideo | MIT | 视频导出 |
+| shadcn/ui | MIT | UI |
+| rough.js | MIT | 手绘风格 |

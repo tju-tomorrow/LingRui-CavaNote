@@ -1,0 +1,29 @@
+{
+  "name": "lingrui-scribe",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "AI 基建动画解释器 + 画布宠物 + 知识落盘工具",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/vendor/*",
+    "packages/vendor/*/packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter @lingrui/web dev",
+    "dev:collab": "bun run --filter @lingrui/collab dev",
+    "build": "bun run --filter '*' build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "vendor": "bash scripts/vendor.sh"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    "paths": {
+      "@lingrui/knowledge": ["./packages/knowledge/src/index.ts"],
+      "@lingrui/anim": ["./packages/anim/src/index.ts"],
+      "@lingrui/canvas": ["./packages/canvas/src/index.ts"],
+      "@lingrui/mascot": ["./packages/mascot/src/index.ts"],
+      "@lingrui/ai": ["./packages/ai/src/index.ts"],
+      "@lingrui/ui": ["./packages/ui/src/index.ts"]
+    }
+  },
+  "include": ["apps/*/src", "packages/*/src"]
+}

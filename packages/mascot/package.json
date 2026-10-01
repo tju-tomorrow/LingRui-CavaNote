@@ -1,0 +1,17 @@
+{
+  "name": "@lingrui/mascot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@lingrui/anim": "workspace:*"
+  },
+  "peerDependencies": {
+    "three": "^0.186.1",
+    "@pixiv/three-vrm": "^3.5.5"
+  }
+}
