@@ -704,6 +704,143 @@ html[data-glass="desktop"] .bn-container {
   white-space: pre-wrap;
 }
 
+/* 详情卡的编辑模式 */
+.node-detail.is-editing {
+  width: 340px;
+}
+
+.nd-edit {
+  flex: none;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 5px;
+  font-size: 11px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.nd-edit.is-on,
+.nd-edit:hover {
+  background: #f0f0ff;
+  color: var(--accent, #5b5bd6);
+}
+
+.nd-title-input,
+.nd-summary-input,
+.nd-line-input,
+.nd-answer-input,
+.nd-chip-input {
+  font: inherit;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  padding: 3px 6px;
+  outline: none;
+  min-width: 0;
+}
+
+.nd-title-input {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nd-summary-input,
+.nd-answer-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12.5px;
+  line-height: 1.55;
+  resize: vertical;
+  margin-bottom: 6px;
+}
+
+.nd-line-input {
+  flex: 1;
+  font-size: 12.5px;
+}
+
+.nd-title-input:focus,
+.nd-summary-input:focus,
+.nd-line-input:focus,
+.nd-answer-input:focus,
+.nd-chip-input:focus {
+  border-color: var(--accent, #5b5bd6);
+}
+
+.nd-roles-edit li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 0;
+}
+
+.nd-roles-edit li::before {
+  content: none;
+}
+
+.nd-del {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.nd-del:hover {
+  background: #ffe9e9;
+  color: #c92a2a;
+}
+
+.nd-add {
+  border: 1px dashed var(--border);
+  background: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  border-radius: 5px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.nd-add:hover {
+  color: var(--accent, #5b5bd6);
+  border-color: var(--accent, #5b5bd6);
+}
+
+.nd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nd-chip-del {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+}
+
+.nd-chip-del:hover {
+  color: #c92a2a;
+}
+
+.nd-chip-input {
+  font-size: 11.5px;
+  width: 110px;
+  border-radius: 99px;
+}
+
+.nd-faq li {
+  padding: 6px 0;
+}
+
 /* 只读分享视图 */
 .chat-readonly {
   padding: 10px 14px;
