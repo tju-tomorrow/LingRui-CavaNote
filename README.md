@@ -58,9 +58,14 @@ docs/
 ```bash
 bun install
 bun run dev          # 前端 → http://localhost:5173
-bun run dev:collab   # 协同服务（需 Postgres + Redis）
 bun run typecheck
 bun run test
+
+# 多人实时（可选）
+docker compose up -d                 # Postgres + Valkey + MinIO
+cp apps/collab/.env.example apps/collab/.env
+bun run dev:collab                   # → ws://localhost:1234
+cp apps/web/.env.example apps/web/.env.local   # 填 VITE_COLLAB_URL
 ```
 
 前端默认**不需要任何后端**：笔记与画布存在浏览器 IndexedDB 里，刷新不丢。

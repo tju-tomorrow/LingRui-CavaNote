@@ -23,7 +23,22 @@ function redisConfig(): { host: string; port: number; options?: { password?: str
   };
 }
 
-await migrate();
+try {
+  await migrate();
+} catch (error) {
+  console.error(
+    [
+      "[collab] 无法连接 Postgres。",
+      "",
+      "先启动本地依赖服务：",
+      "  docker compose up -d",
+      "",
+      `DATABASE_URL=${process.env.DATABASE_URL ?? "(未设置)"}`,
+      `原因：${error instanceof Error && error.message ? error.message : String(error)}`,
+    ].join("\n"),
+  );
+  process.exit(1);
+}
 
 const server = new Server({
   port,
