@@ -97,6 +97,7 @@ export function CanvasStage() {
   const [api, setApi] = useState<ExcalidrawAPI | null>(null);
   const fittedRef = useRef(false);
   const draggingRef = useRef(false);
+  const prevCountRef = useRef(0);
 
   const desired = useMemo(() => {
     if (nodes.length === 0) return null;
@@ -149,6 +150,17 @@ export function CanvasStage() {
       });
     }
   }, [api, desired]);
+
+  // 节点变多（通常是 AI 生成的）时重新对焦，否则新节点会落在视野外，
+  // 用户以为"AI 什么也没做"。
+  useEffect(() => {
+    const grew = nodes.length > prevCountRef.current && prevCountRef.current > 0;
+    prevCountRef.current = nodes.length;
+    if (!grew || !api) return;
+    requestAnimationFrame(() => {
+      api.scrollToContent(undefined, { fitToContent: true, animate: true });
+    });
+  }, [nodes.length, api]);
 
   return (
     <div className="excalidraw-host">

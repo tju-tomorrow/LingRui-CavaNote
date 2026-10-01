@@ -204,3 +204,21 @@ describe("provenance 与三级保险（ADR-0011）", () => {
     expect(summarizeRisk([add, held])).toBe("destructive");
   });
 });
+
+describe("spawnNode 的坐标必须落到 layout（回归）", () => {
+  test("不写 layout 会导致新节点堆在原点 (0,0)", () => {
+    const c = ctx();
+    executeTool(c, {
+      name: "spawnNode",
+      input: { id: "kafka", kind: "queue", title: "Kafka", at: [1340, 40] },
+    });
+    // 曾经只产出动画动作、不写 layout，画布回退到默认 (0,0)
+    expect(getLayout(c.doc).get("kafka")).toEqual({ x: 1340, y: 40 });
+  });
+
+  test("AI 生成在原点时也显式写入，避免与默认布局混淆", () => {
+    const c = ctx();
+    executeTool(c, { name: "spawnNode", input: { id: "a", kind: "service", title: "A", at: [0, 0] } });
+    expect(getLayout(c.doc).get("a")).toEqual({ x: 0, y: 0 });
+  });
+});

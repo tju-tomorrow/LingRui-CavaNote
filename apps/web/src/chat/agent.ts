@@ -12,11 +12,14 @@ import { getNodes } from "@lingrui/knowledge";
 import type { Action } from "@lingrui/anim";
 import { ydoc } from "../collab/doc";
 import { layoutSnapshot } from "../collab/layout";
+import { NODE_SIZE } from "../collab/seed";
 import { getFocus, setFocus } from "../state/focus";
 import { buildReply } from "./explain";
 
 /** 时间轴游标：每次交互往后推进，动作流因此天然有序（P2 的时间轴会消费它） */
 let cursor = 0;
+/** 上一轮 AI 生成的节点，用于"把它连到 X" */
+let lastSpawnedId: string | undefined;
 const timeline: Action[] = [];
 
 function applyToolResult(result: ToolResult): string {
@@ -33,7 +36,10 @@ export function runToolCall(name: string, input: unknown): string {
   const result = executeTool({ doc: ydoc, t: cursor }, call);
   if (result.ok) {
     if (call.name === "focus") setFocus(call.input.nodeId);
-    if (call.name === "spawnNode") setFocus(call.input.id);
+    if (call.name === "spawnNode") {
+      setFocus(call.input.id);
+      lastSpawnedId = call.input.id;
+    }
   }
   return applyToolResult(result);
 }
@@ -46,9 +52,20 @@ export interface AgentTurn {
 /** 本地路径：planner → executor → 回话 */
 export function runAgent(message: string): AgentTurn {
   const nodes = [...getNodes(ydoc).values()];
-  const occupied = Object.values(layoutSnapshot());
+  const layout = layoutSnapshot();
+  // 传矩形而不是点：否则新节点算不出真正的空位（会压在已有节点上）
+  const occupied = nodes.map((n) => {
+    const at = layout[n.id] ?? { x: 0, y: 0 };
+    return { x: at.x, y: at.y, width: NODE_SIZE.width, height: NODE_SIZE.height };
+  });
 
-  const p = plan(message, { t: cursor, nodes, occupied });
+  const p = plan(message, {
+    t: cursor,
+    nodes,
+    occupied,
+    lastSpawnedId,
+    nodeSize: NODE_SIZE,
+  });
   const toolResults: ToolResult[] = [];
 
   for (const call of p.calls) {
@@ -59,7 +76,10 @@ export function runAgent(message: string): AgentTurn {
 
     if (result.ok) {
       if (call.name === "focus") setFocus(call.input.nodeId);
-      if (call.name === "spawnNode") setFocus(call.input.id);
+      if (call.name === "spawnNode") {
+        setFocus(call.input.id);
+        lastSpawnedId = call.input.id;
+      }
     }
   }
   cursor += 2;

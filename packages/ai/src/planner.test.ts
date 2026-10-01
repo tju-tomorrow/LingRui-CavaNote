@@ -9,7 +9,14 @@ function node(id: string, kind: KnowledgeNode["kind"], title: string): Knowledge
 const NODES: KnowledgeNode[] = [
   node("user", "client", "用户"),
   node("gateway", "gateway", "API 网关"),
+  node("service", "service", "后端服务"),
   node("redis", "cache", "Redis 缓存"),
+];
+
+const RECTS = [
+  { x: 0, y: 0, width: 250, height: 96 },
+  { x: 320, y: 0, width: 250, height: 96 },
+  { x: 680, y: 0, width: 250, height: 96 },
 ];
 
 describe("inferKind", () => {
@@ -22,27 +29,82 @@ describe("inferKind", () => {
 });
 
 describe("freeSlot", () => {
-  test("放在已有节点右侧，避免重叠", () => {
-    expect(freeSlot([{ x: 0, y: 0 }, { x: 320, y: 0 }])).toEqual([640, 0]);
-  });
+  const SIZE = { width: 250, height: 96 };
+
   test("空画布从原点开始", () => {
-    expect(freeSlot([])).toEqual([0, 0]);
+    expect(freeSlot([], SIZE)).toEqual([0, 0]);
+  });
+
+  test("放在内容右侧，且与已有矩形不重叠", () => {
+    const occupied = [
+      { x: 0, y: 0, width: 250, height: 96 },
+      { x: 320, y: 0, width: 250, height: 96 },
+    ];
+    const [x, y] = freeSlot(occupied, SIZE);
+    expect(x).toBe(320 + 250 + 70);
+    const candidate = { x, y, width: SIZE.width, height: SIZE.height };
+    for (const r of occupied) {
+      const overlap = x < r.x + r.width && r.x < x + SIZE.width && y < r.y + r.height && r.y < y + SIZE.height;
+      expect(overlap).toBe(false);
+    }
+  });
+
+  test("纵向与现有图谱居中对齐", () => {
+    const occupied = [
+      { x: 0, y: -180, width: 250, height: 96 },
+      { x: 0, y: 180, width: 250, height: 96 },
+    ];
+    const [, y] = freeSlot(occupied, SIZE);
+    expect(y).toBe(0); // ( -180 + 276 ) / 2 - 48
   });
 });
 
 describe("plan", () => {
   test("“添加 X” 产出 spawnNode", () => {
-    const p = plan("添加一个 Kafka", { t: 0, nodes: NODES, occupied: [{ x: 0, y: 0 }] });
+    const p = plan("添加一个 Kafka", { t: 0, nodes: NODES, occupied: RECTS });
     expect(p.calls).toHaveLength(1);
     expect(p.calls[0]).toMatchObject({
       name: "spawnNode",
-      input: { kind: "queue", at: [320, 0] },
+      input: { kind: "queue", at: [1000, 0] },
     });
     expect(p.reply).toContain("Kafka");
   });
 
+  test("“添加 X 并连到 Y” 同时产出 spawnNode + connect", () => {
+    const p = plan("添加一个 Kafka 并连到后端服务", { t: 0, nodes: NODES, occupied: RECTS });
+    expect(p.calls.map((c) => c.name)).toEqual(["spawnNode", "connect"]);
+    const spawn = p.calls[0];
+    if (spawn?.name === "spawnNode") {
+      expect(spawn.input.title).toBe("Kafka"); // 连词不能混进标题
+    }
+    const conn = p.calls[1];
+    if (conn?.name === "connect") {
+      expect(conn.input.to).toBe("service"); // 按类型关键词落到"后端服务"
+    }
+  });
+
+  test("“把它连到 Y” 接上一轮生成的节点", () => {
+    const p = plan("把它连到 Redis", {
+      t: 0,
+      nodes: NODES,
+      occupied: RECTS,
+      lastSpawnedId: "n-kafka-4",
+    });
+    const conn = p.calls.find((c) => c.name === "connect");
+    expect(conn?.name).toBe("connect");
+    if (conn?.name === "connect") {
+      expect(conn.input.from).toBe("n-kafka-4");
+      expect(conn.input.to).toBe("redis");
+    }
+  });
+
+  test("没有上一轮节点时，「把它连到」不产生调用", () => {
+    const p = plan("把它连到 Redis", { t: 0, nodes: NODES, occupied: RECTS });
+    expect(p.calls.some((c) => c.name === "connect")).toBe(false);
+  });
+
   test("口语量词不会跑进标题", () => {
-    const p = plan("添加一个 Kafka 消息队列", { t: 0, nodes: NODES, occupied: [] });
+    const p = plan("添加一个 Kafka 消息队列", { t: 0, nodes: NODES, occupied: RECTS });
     const call = p.calls[0];
     expect(call?.name).toBe("spawnNode");
     if (call?.name === "spawnNode") {

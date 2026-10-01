@@ -22,11 +22,68 @@ const KIND_HINTS: Array<{ kind: NodeKind; words: string[] }> = [
 /** "添加 X" / "加一个 X" / "再画一个 X" */
 const ADD_PATTERN = /(?:添加|加上|新增|加一个|再加一个|画一个|补一个|add)\s*[:：]?\s*(.+)/i;
 
+/** "连到 Y" / "接到 Y" */
+const CONNECT_PATTERN = /(?:连到|连接到|接到|接入到|指向|connect\s*to)\s*[:：]?\s*(.+)/i;
+// 切分用：把前面的连词（并/和/与/，）一起吃掉，否则会残留在标题里
+const CONNECT_SPLIT = /(?:并|和|与|，|,|、)?\s*(?:连到|连接到|接到|接入到|指向|connect\s*to)/i;
+
+/** 口语量词前缀 */
+const QUANTIFIER = /^(?:一个|一条|一台|一组|个|些)\s*/;
+
+export const DEFAULT_NODE_SIZE = { width: 250, height: 96 };
+
+export interface SlotRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const overlaps = (a: SlotRect, b: SlotRect): boolean =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/**
+ * 找一个不会与现有节点重叠的空位。
+ *
+ * 早先的实现只用 x 坐标（`max(x) + 320`）、忽略节点宽度，调用方传的还是"点"而不是"矩形"，
+ * 结果新节点会压在已有节点上。这里按矩形算，并从内容右侧向右逐列找。
+ */
+export function freeSlot(
+  occupied: SlotRect[],
+  size: { width: number; height: number } = DEFAULT_NODE_SIZE,
+  gap = 70,
+): [number, number] {
+  if (occupied.length === 0) return [0, 0];
+
+  const right = Math.max(...occupied.map((r) => r.x + r.width));
+  const top = Math.min(...occupied.map((r) => r.y));
+  const bottom = Math.max(...occupied.map((r) => r.y + r.height));
+  // 纵向与现有图谱居中对齐，看起来不像被随手丢在角落
+  const centerY = Math.round((top + bottom) / 2 - size.height / 2);
+
+  const stepX = size.width + gap;
+  const stepY = size.height + gap;
+
+  for (let col = 0; col < 32; col += 1) {
+    const x = right + gap + col * stepX;
+    for (let row = 0; row < 32; row += 1) {
+      const y = centerY + row * stepY;
+      const candidate = { x, y, width: size.width, height: size.height };
+      if (!occupied.some((r) => overlaps(r, candidate))) return [x, y];
+    }
+  }
+
+  return [right + gap, centerY];
+}
+
 export interface PlanContext {
   t: number;
   nodes: KnowledgeNode[];
-  /** 画布上已占用的位置 */
-  occupied: Array<{ x: number; y: number }>;
+  /** 画布上已占用的矩形（含尺寸，不是点） */
+  occupied: SlotRect[];
+  /** 上一轮 AI 刚生成的节点，用于"把它连到 X" */
+  lastSpawnedId?: string;
+  nodeSize?: { width: number; height: number };
 }
 
 export interface Plan {
@@ -43,13 +100,6 @@ export function inferKind(text: string): NodeKind {
   return "concept";
 }
 
-/** 在已有节点右侧找一个空位，保证新节点不会盖住旧的 */
-export function freeSlot(occupied: Array<{ x: number; y: number }>): [number, number] {
-  if (occupied.length === 0) return [0, 0];
-  const maxX = Math.max(...occupied.map((p) => p.x));
-  return [maxX + 320, 0];
-}
-
 const KIND_TITLE: Partial<Record<NodeKind, string>> = {
   cache: "缓存",
   queue: "消息队列",
@@ -62,32 +112,78 @@ const KIND_TITLE: Partial<Record<NodeKind, string>> = {
   concept: "概念",
 };
 
+function clean(text: string): string {
+  return text
+    .trim()
+    .replace(/[。！!？?，,]$/, "")
+    .replace(QUANTIFIER, "")
+    .trim();
+}
+
+/** 从"连到 Y"里解析出目标节点 */
+function findConnectTarget(text: string, nodes: KnowledgeNode[]): KnowledgeNode | undefined {
+  const match = CONNECT_PATTERN.exec(text);
+  const raw = match?.[1] ? clean(match[1]) : "";
+  if (!raw) return undefined;
+
+  const byTitle = nodes.find((n) => raw.includes(n.title) || n.title.includes(raw));
+  if (byTitle) return byTitle;
+
+  const kind = inferKind(raw);
+  return kind === "concept" ? undefined : nodes.find((n) => n.kind === kind);
+}
+
 export function plan(message: string, ctx: PlanContext): Plan {
   const text = message.trim();
   if (!text) return { calls: [], reply: "" };
 
-  // 1) "添加 X" → spawnNode
+  const size = ctx.nodeSize ?? DEFAULT_NODE_SIZE;
   const addMatch = ADD_PATTERN.exec(text);
+  const connectTarget = findConnectTarget(text, ctx.nodes);
+
+  // 1) "添加 X"（若同句还有"连到 Y"，一并接上）
   if (addMatch?.[1]) {
-    const raw = addMatch[1]
-      .trim()
-      .replace(/[。！!？?，,]$/, "")
-      // 去掉口语量词："添加一个 Kafka" → "Kafka"
-      .replace(/^(?:一个|一条|一台|一组|个|些)\s*/, "")
-      .trim();
+    // "添加一个 Kafka 并连到后端服务" → 标题只取 "Kafka"
+    const withoutConnect = addMatch[1].split(CONNECT_SPLIT)[0] ?? addMatch[1];
+    const raw = clean(withoutConnect);
     if (raw) {
       const kind = inferKind(raw);
       const title = raw.length > 1 ? raw : (KIND_TITLE[kind] ?? "新节点");
       const id = `n-${slug(title)}-${ctx.nodes.length + 1}`;
-      const at = freeSlot(ctx.occupied);
+      const at = freeSlot(ctx.occupied, size);
+
+      const calls: CanvasToolCall[] = [{ name: "spawnNode", input: { id, kind, title, at } }];
+      if (connectTarget) {
+        calls.push({
+          name: "connect",
+          input: { from: id, to: connectTarget.id, kind: "calls", label: "接入" },
+        });
+      }
+
       return {
-        calls: [{ name: "spawnNode", input: { id, kind, title, at } }],
-        reply: `已在画布上生成节点「${title}」（类型：${kind}）。\n它现在还没有连到链路上——你可以说"把它连到后端服务"。`,
+        calls,
+        reply: connectTarget
+          ? `已在画布上生成「${title}」并接到「${connectTarget.title}」。`
+          : `已在画布上生成节点「${title}」（类型：${kind}）。\n它现在还没有连到链路上——你可以说"把它连到后端服务"。`,
       };
     }
   }
 
-  // 2) 命中已有节点 → focus + 旁白
+  // 2) "把它连到 Y" → 接上一轮生成的节点
+  if (connectTarget && ctx.lastSpawnedId) {
+    return {
+      calls: [
+        {
+          name: "connect",
+          input: { from: ctx.lastSpawnedId, to: connectTarget.id, kind: "calls", label: "接入" },
+        },
+        { name: "focus", input: { nodeId: ctx.lastSpawnedId } },
+      ],
+      reply: `已把上一轮生成的节点接到「${connectTarget.title}」。`,
+    };
+  }
+
+  // 3) 命中已有节点 → focus + 旁白
   const hit = ctx.nodes.find((n) => text.includes(n.title) || text.includes(n.id));
   if (hit) {
     return {
@@ -99,11 +195,10 @@ export function plan(message: string, ctx: PlanContext): Plan {
     };
   }
 
-  // 3) 只有关键词命中类型
+  // 4) 只有关键词命中类型
   const kind = inferKind(text);
   if (kind !== "concept") {
     const existing = ctx.nodes.find((n) => n.kind === kind);
-    // 链路上已经有这类实体 → 聚焦它
     if (existing) {
       return {
         calls: [
@@ -113,12 +208,11 @@ export function plan(message: string, ctx: PlanContext): Plan {
         reply: "",
       };
     }
-    // 还没有 → 补上并聚焦
     const title = KIND_TITLE[kind] ?? "新节点";
     const id = `n-${slug(title)}-${ctx.nodes.length + 1}`;
     return {
       calls: [
-        { name: "spawnNode", input: { id, kind, title, at: freeSlot(ctx.occupied) } },
+        { name: "spawnNode", input: { id, kind, title, at: freeSlot(ctx.occupied, size) } },
         { name: "focus", input: { nodeId: id } },
       ],
       reply: `这条链路上还没有「${title}」，我已经把它加到画布上了。`,

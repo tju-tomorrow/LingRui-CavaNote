@@ -213,6 +213,10 @@ function spawnNode(ctx: ToolContext, input: SpawnNodeInput): ToolResult {
   };
   upsertNode(ctx.doc, node);
 
+  // 关键：把坐标写进 layout。只产出动画动作是不够的，
+  // 否则画布会回退到默认位置 (0,0)，新节点堆在原点。
+  setLayoutPosition(ctx.doc, input.id, input.at[0], input.at[1]);
+
   return done(`已生成节点「${input.title}」`, "add", [
     { t: ctx.t, kind: "node.spawn", nodeId: input.id, at: input.at },
   ]);
