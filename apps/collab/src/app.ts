@@ -18,6 +18,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { canAccess, verifyToken } from "./auth";
 import { handleAuth, isAuthRequest } from "./auth-routes";
 import { handleChat, isChatRequest } from "./chat";
+import { closePools } from "./db";
 import { createPersistence, type Persistence } from "./persistence";
 import { createUserStore, migrateUsers, type UserStore } from "./users";
 
@@ -183,6 +184,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       await server.destroy();
       await persistence?.close().catch(() => undefined);
       await users?.close().catch(() => undefined);
+      // 连接池是共享的，最后统一关
+      await closePools();
     },
   };
 }

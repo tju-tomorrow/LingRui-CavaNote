@@ -13,38 +13,15 @@ import { logout, useAuth } from "../auth/store";
 import { CHAT_API, remoteEnabled } from "../chat/remote";
 import { remoteProvider } from "../collab/doc";
 import { setView } from "../state/view";
-
-const THEME_KEY = "lingrui-theme";
-type Theme = "light" | "dark";
-
-function currentTheme(): Theme {
-  try {
-    return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
-  } catch {
-    return "light";
-  }
-}
-
-function applyTheme(theme: Theme): void {
-  document.documentElement.dataset["theme"] = theme;
-  try {
-    localStorage.setItem(THEME_KEY, theme);
-  } catch {
-    /* ignore */
-  }
-}
+import { useTheme } from "./theme";
 
 export function SettingsView() {
   const auth = useAuth();
-  const [theme, setTheme] = useState<Theme>(currentTheme);
+  const [theme, setTheme] = useTheme();
   const [collab, setCollab] = useState(() => ({
     url: remoteProvider ? "已配置" : "未配置",
     synced: remoteProvider?.synced ?? false,
   }));
-
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
 
   // 真实读一次协同连接状态（provider 的事件驱动）
   useEffect(() => {

@@ -4,7 +4,7 @@
  * 之所以做成工厂而不是模块级单例：桌面端（Electron 主进程）要内嵌这个服务，
  * 连接串来自运行时配置而不是模块加载时的 env。
  */
-import pg from "pg";
+import { getPool } from "./db";
 
 export interface Persistence {
   migrate(): Promise<void>;
@@ -22,7 +22,7 @@ create table if not exists yjs_documents (
 `;
 
 export function createPersistence(connectionString: string): Persistence {
-  const pool = new pg.Pool({ connectionString });
+  const pool = getPool(connectionString);
 
   return {
     async migrate() {
@@ -48,7 +48,7 @@ export function createPersistence(connectionString: string): Persistence {
     },
 
     async close() {
-      await pool.end();
+      // 池是共享的，由 closePools() 统一关闭
     },
   };
 }

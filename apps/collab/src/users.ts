@@ -10,7 +10,7 @@
  */
 import { randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import pg from "pg";
+import { getPool } from "./db";
 
 const scryptAsync = promisify(scrypt) as (
   password: string,
@@ -58,7 +58,7 @@ export interface UserStore {
 }
 
 export function createUserStore(connectionString: string): UserStore {
-  const pool = new pg.Pool({ connectionString });
+  const pool = getPool(connectionString);
 
   return {
     async create({ email, password, name }) {
@@ -96,17 +96,12 @@ export function createUserStore(connectionString: string): UserStore {
     },
 
     async close() {
-      await pool.end();
+      // 池是共享的，由 closePools() 统一关闭
     },
   };
 }
 
-/** 建表（和 persistence.migrate 一起在启动时跑） */
+/** 建表（和 persistence.migrate 一起在启动时跑）——注意**不要**关池，它是共享的 */
 export async function migrateUsers(connectionString: string): Promise<void> {
-  const pool = new pg.Pool({ connectionString });
-  try {
-    await pool.query(SCHEMA);
-  } finally {
-    await pool.end().catch(() => undefined);
-  }
+  await getPool(connectionString).query(SCHEMA);
 }
