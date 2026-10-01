@@ -208,6 +208,19 @@
 }
 .lr-toast.in { opacity: 1; transform: translate(-50%, 0); }
 
+/* ---- 画布首屏提示 ---- */
+.canvas-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
 /* ---- 只读分享横幅 ---- */
 .readonly-banner {
   position: fixed; top: 56px; left: 50%; transform: translateX(-50%);

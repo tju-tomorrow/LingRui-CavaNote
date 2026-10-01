@@ -133,11 +133,17 @@ export type NoteId = string;
 export interface NoteMeta {
   id: NoteId;
   title: string;
-  /** 正文所在的 Y.XmlFragment 名 */
+  /** 正文所在的 Y.XmlFragment 名（分组没有正文，所以是空串） */
   fragment: string;
   createdAt: number;
   updatedAt: number;
   order?: number;
+  /** 上级分组 / 笔记；null 或省略 = 顶层（PRD/主界面.md §2.3 的目录树） */
+  parentId?: string | null;
+  /** true = 分组（文件夹），不装正文；省略 = 真笔记 */
+  isFolder?: boolean;
+  /** 横切标签（PRD/主界面.md §5.5），笔记与节点都能打 */
+  tags?: string[];
 }
 
 /** 画布上的位置。属于“表现”，但存在同一个 Y.Doc 里以便持久化与协同。 */

@@ -1,0 +1,504 @@
+/* =====================================================================
+ * polish.css —— 视觉精修层（最后加载，覆盖 index.css / shell.css / timeline.css）
+ *
+ * 只调「观感」：配色 token、字号、圆角、阴影、间距、悬停态。
+ * 不改任何布局结构 / 类名 / 交互，功能零影响。
+ * ===================================================================== */
+
+/* ---------- 1. 设计 token ---------- */
+:root {
+  --bg: #ffffff;
+  --panel: #f6f6f8;
+  --panel-2: #fbfbfc;
+  --border: #e9e9ee;
+  --border-strong: #dcdce3;
+  --text: #16161a;
+  --text-2: #3c3c46;
+  --muted: #8b8b95;
+  --accent: #5b5bd6;
+  --accent-strong: #4f4fcc;
+  --accent-weak: #eeeefe;
+  --accent-contrast: #ffffff;
+  --ok: #0f7b6c;
+  --r-sm: 6px;
+  --r: 9px;
+  --r-lg: 13px;
+  --sh-1: 0 1px 2px rgba(16, 16, 24, 0.05);
+  --sh-2: 0 4px 16px rgba(16, 16, 24, 0.08);
+  --sh-3: 0 20px 50px rgba(16, 16, 24, 0.16);
+}
+
+:root[data-theme="dark"] {
+  --bg: #131318;
+  --panel: #1a1a21;
+  --panel-2: #17171d;
+  --border: #2a2a33;
+  --border-strong: #3a3a46;
+  --text: #ececf1;
+  --text-2: #c7c7d0;
+  --muted: #8f8f9c;
+  --accent: #8b8bf0;
+  --accent-strong: #9d9df5;
+  --accent-weak: #252547;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --sh-3: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.003em;
+}
+
+::selection {
+  background: rgba(91, 91, 214, 0.22);
+}
+
+/* 细滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d3d3dc transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d3d3dc;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b9b9c6;
+  background-clip: content-box;
+}
+:root[data-theme="dark"] * {
+  scrollbar-color: #3a3a46 transparent;
+}
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #3a3a46;
+  background-clip: content-box;
+}
+
+/* ---------- 2. 顶栏 ---------- */
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  gap: 14px;
+}
+.brand {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.tb .tb-search {
+  background: var(--panel);
+  border-color: transparent;
+  border-radius: var(--r);
+  min-height: 32px;
+  transition: background 0.14s, box-shadow 0.14s;
+}
+.tb .tb-search:hover {
+  background: #f0f0f4;
+}
+:root[data-theme="dark"] .tb .tb-search:hover {
+  background: #22222b;
+}
+.tb .tb-search kbd {
+  background: var(--bg);
+  border-color: var(--border);
+  font-family: inherit;
+}
+.tb .tb-icon {
+  border-radius: var(--r);
+  transition: background 0.12s, color 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tb .tb-avatar {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+  font-weight: 600;
+}
+
+/* ---------- 3. 左图标栏 ---------- */
+.rail {
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  gap: 3px;
+  padding: 10px 0;
+}
+.rail .rail-item {
+  width: 46px;
+  border-radius: 11px;
+  padding: 7px 0;
+  gap: 3px;
+  transition: background 0.12s, color 0.12s;
+}
+.rail .rail-item:hover {
+  background: #ededf3;
+  color: var(--text);
+}
+:root[data-theme="dark"] .rail .rail-item:hover {
+  background: #23232c;
+}
+.rail .rail-item.active {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+.rail .rail-item.active .rail-icon {
+  transform: scale(1.06);
+}
+.rail .rail-icon {
+  font-size: 17px;
+  transition: transform 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.rail .rail-label {
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+/* ---------- 4. 侧栏 / 笔记树 ---------- */
+.app.lr .sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+}
+.tree {
+  padding: 8px 10px;
+}
+.tree .tree-head {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  padding: 6px 6px 8px;
+}
+.tree .tree-actions button {
+  font-size: 15px;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  transition: background 0.12s, color 0.12s;
+}
+.tree .tree-actions button:hover {
+  background: #e7e7ee;
+  color: var(--text);
+}
+.tree .tree-group {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 14px 6px 5px;
+}
+.tree .tree-node {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  gap: 8px;
+  transition: background 0.12s, color 0.12s;
+}
+.tree .tree-node:hover {
+  background: #ededf3;
+}
+:root[data-theme="dark"] .tree .tree-node:hover {
+  background: #23232c;
+}
+.tree .tree-node.active {
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-weight: 550;
+}
+.tree .tree-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2.5px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------- 5. 主标题区 ---------- */
+.doc-header {
+  padding: 16px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.doc-header .doc-title {
+  font-size: 20px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+.doc-header .doc-meta {
+  margin-top: 5px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.doc-header .doc-actions {
+  gap: 8px;
+}
+.doc-header .dh-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: var(--r);
+  padding: 6px 13px;
+  font-size: 12.5px;
+  font-weight: 550;
+  box-shadow: var(--sh-1);
+  transition: background 0.12s, border-color 0.12s, transform 0.06s;
+}
+.doc-header .dh-btn:not(:disabled):hover {
+  border-color: var(--border-strong);
+  background: var(--panel);
+}
+.doc-header .dh-btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+.doc-header .dh-btn.primary {
+  background: linear-gradient(180deg, #6a6ae0, var(--accent));
+  border-color: var(--accent-strong);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(91, 91, 214, 0.35), 0 6px 16px rgba(91, 91, 214, 0.22);
+}
+.doc-header .dh-btn.primary:not(:disabled):hover {
+  background: linear-gradient(180deg, #6f6fe6, var(--accent-strong));
+}
+
+/* ---------- 6. 分栏 / pane ---------- */
+.pane.doc-pane {
+  border-right: 1px solid var(--border);
+}
+.pane-head {
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- 7. 文档排版 ---------- */
+.editor-host {
+  padding: 10px 24px 64px;
+}
+.editor-host .bn-editor {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-2);
+  background: transparent;
+}
+.editor-host h1 {
+  font-size: 25px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin: 0.35em 0 0.5em;
+  color: var(--text);
+}
+.editor-host h2 {
+  font-size: 19px;
+  font-weight: 680;
+  letter-spacing: -0.012em;
+  margin-top: 1.5em;
+  color: var(--text);
+}
+.editor-host h3 {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text);
+}
+.editor-host p {
+  margin: 0.55em 0;
+}
+.editor-host .bn-block-content[data-content-type="heading"] {
+  padding-top: 0.25em;
+}
+
+/* ---------- 8. 画布 ---------- */
+.pane.canvas {
+  background: radial-gradient(circle at 1px 1px, #e6e6ec 1px, transparent 0) 0 0 / 22px 22px;
+}
+:root[data-theme="dark"] .pane.canvas {
+  background: radial-gradient(circle at 1px 1px, #23232c 1px, transparent 0) 0 0 / 22px 22px;
+}
+.pane.canvas .excalidraw .Island,
+.pane.canvas .excalidraw .App-toolbar {
+  box-shadow: 0 6px 20px rgba(16, 16, 24, 0.1) !important;
+  border-radius: 12px !important;
+}
+
+/* ---------- 9. 时间轴 ---------- */
+.timeline.tl {
+  background: var(--panel-2);
+  border-top: 1px solid var(--border);
+  padding: 10px 20px 11px;
+  gap: 10px;
+}
+.tl .tl-controls {
+  gap: 10px;
+}
+/* 播放键：实心圆主色 */
+.tl .tl-controls > .tl-btn:first-child {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  border-color: var(--accent-strong);
+  color: #fff;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(91, 91, 214, 0.35);
+}
+.tl .tl-controls > .tl-btn:first-child:not(:disabled):hover {
+  background: var(--accent-strong);
+  color: #fff;
+}
+.tl .tl-controls > .tl-btn:first-child:disabled {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--muted);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .tl .tl-controls > .tl-btn:first-child:not(:disabled) {
+  color: #14141a;
+}
+.tl .tl-btn {
+  border-radius: var(--r);
+  background: var(--bg);
+  box-shadow: var(--sh-1);
+  font-size: 12.5px;
+  font-weight: 550;
+  padding: 5px 11px;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.tl .tl-btn:not(:disabled):hover {
+  background: var(--panel);
+}
+.tl .tl-range {
+  height: 4px;
+}
+.tl .tl-shot {
+  border-radius: 10px;
+  box-shadow: var(--sh-1);
+  transition: border-color 0.12s, box-shadow 0.12s, transform 0.06s;
+}
+.tl .tl-shot:not(.active):hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+.tl .tl-shot.active {
+  box-shadow: 0 0 0 1px var(--accent), 0 6px 16px rgba(91, 91, 214, 0.16);
+  background: var(--accent-weak);
+}
+.tl .tl-shot-svg {
+  border: 1px solid var(--border);
+}
+.tl .tl-progress {
+  border-left: 1px solid var(--border);
+}
+.tl .tl-progress-item {
+  border-radius: var(--r-sm);
+}
+.tl .tl-progress-item.current {
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-weight: 550;
+}
+
+/* ---------- 10. 命令面板 ---------- */
+.palette-mask {
+  background: rgba(18, 18, 28, 0.32);
+  backdrop-filter: blur(3px);
+}
+.palette {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--sh-3);
+}
+.palette .palette-input {
+  padding: 16px 18px;
+  font-size: 15px;
+}
+.palette .palette-list {
+  padding: 8px;
+}
+.palette .palette-item {
+  padding: 9px 10px;
+  border-radius: var(--r);
+  transition: background 0.1s;
+}
+.palette .palette-item[aria-selected="true"],
+.palette .palette-item.active {
+  background: var(--accent-weak);
+}
+
+/* ---------- 11. 暗色补充 ---------- */
+:root[data-theme="dark"] .doc-header .dh-btn,
+:root[data-theme="dark"] .tl .tl-btn {
+  background: var(--panel);
+  color: var(--text);
+}
+:root[data-theme="dark"] .doc-header .dh-btn.primary {
+  background: linear-gradient(180deg, #6f6fe6, var(--accent));
+  color: #14141a;
+}
+:root[data-theme="dark"] .tl .tl-shot {
+  background: var(--panel);
+}
+:root[data-theme="dark"] .tl .tl-shot.active {
+  background: var(--accent-weak);
+}
+
+/* ---------- 13. 笔记条目（tree-item / tree-note-btn）---------- */
+.tree .tree-item {
+  padding: 4px 8px;
+  border-radius: 8px;
+  min-height: 30px;
+  transition: background 0.12s, color 0.12s;
+}
+.tree .tree-item:hover {
+  background: #ededf3;
+}
+:root[data-theme="dark"] .tree .tree-item:hover {
+  background: #23232c;
+}
+.tree .tree-item.active {
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-weight: 550;
+}
+:root[data-theme="dark"] .tree .tree-item.active {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+.tree .tree-note-btn {
+  font-size: 13px;
+}
+:root[data-theme="dark"] .tree .tree-note-actions button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="dark"] .tree-rename {
+  background: #1f1f26;
+  color: var(--text);
+}
+
+/* ---------- 12. toast ---------- */
+.lr-toast {
+  background: rgba(24, 24, 34, 0.94);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--sh-3);
+  font-weight: 500;
+}

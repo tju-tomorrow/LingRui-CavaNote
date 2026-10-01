@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { logout, useAuth } from "../auth/store";
 import { useDocumentActions } from "./actions";
 import { LoginDialog } from "./LoginDialog";
+import { IconExport, IconMoon, IconPlay, IconShare, IconStop, IconSun } from "./icons";
 
 type Theme = "light" | "dark";
 const THEME_KEY = "lingrui-theme";
@@ -56,7 +57,7 @@ export function TopBar({
         title={theme === "light" ? "切到暗色" : "切到亮色"}
         onClick={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
       >
-        {theme === "light" ? "☀" : "☾"}
+        {theme === "light" ? <IconSun size={17} /> : <IconMoon size={17} />}
       </button>
 
       <button
@@ -65,14 +66,14 @@ export function TopBar({
         title={present ? "退出演示" : "进入演示"}
         onClick={onPresent}
       >
-        {present ? "◼" : "▷"}
+        {present ? <IconStop size={17} /> : <IconPlay size={17} />}
       </button>
 
       <button className="tb-icon" type="button" title="导出 Markdown" onClick={() => void exportDoc()}>
-        ⤴
+        <IconExport size={17} />
       </button>
       <button className="tb-icon" type="button" title="复制分享链接" onClick={() => void share()}>
-        ↗
+        <IconShare size={17} />
       </button>
 
       <button

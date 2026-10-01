@@ -20,13 +20,18 @@ import { revealNode } from "./editor/bridge";
 import { PetLayer } from "./pet/PetLayer";
 import { TimelineBar } from "./timeline/TimelineBar";
 import { useFocus } from "./state/focus";
+import { setView as setShellView, useView } from "./state/view";
 import { useActiveNote, setActiveNote } from "./state/notes";
 import { useKnowledgeNotes } from "./collab/useKnowledge";
 import { useAuth } from "./auth/store";
 import { DEFAULT_NOTE_ID, reconnectCollab, seeded } from "./collab/doc";
 import { TopBar } from "./shell/TopBar";
-import { IconRail, type ShellView } from "./shell/IconRail";
+import { IconRail } from "./shell/IconRail";
 import { NoteTree } from "./shell/NoteTree";
+import { KnowledgeView } from "./shell/KnowledgeView";
+import { TagsView } from "./shell/TagsView";
+import { ProjectsView } from "./shell/ProjectsView";
+import { SettingsView } from "./shell/SettingsView";
 import { DocHeader } from "./shell/DocHeader";
 import { CommandPalette } from "./shell/CommandPalette";
 import { NodeDetailCard } from "./canvas/NodeDetailCard";
@@ -34,19 +39,12 @@ import { CanvasHint } from "./shell/CanvasHint";
 import { isReadOnlyShare } from "./shell/share";
 import "./shell/shell.css";
 
-const PLACEHOLDER: Record<Exclude<ShellView, "notes">, string> = {
-  knowledge: "知识库：跨笔记的全局节点图谱与索引（P1.5 占位）。",
-  projects: "项目：把笔记分组管理（P1.5 占位）。",
-  tags: "标签：横切笔记与节点的标签索引（P1.5 占位）。",
-  settings: "设置：主题 / 协同 / AI 模型 / 导出偏好（P1.5 占位）。",
-};
-
 export function App(): JSX.Element {
   const focus = useFocus();
   const auth = useAuth();
   const notes = useKnowledgeNotes();
   const activeNoteId = useActiveNote();
-  const [view, setView] = useState<ShellView>("notes");
+  const view = useView();
   const [present, setPresent] = useState(false);
   const [palette, setPalette] = useState(false);
   const [readOnly] = useState(() => isReadOnlyShare());
@@ -96,13 +94,18 @@ export function App(): JSX.Element {
         present={present}
       />
 
-      <IconRail view={view} onView={setView} />
+      <IconRail view={view} onView={setShellView} />
 
       <aside className="sidebar">
         {view === "notes" ? (
           <NoteTree />
         ) : (
-          <div className="view-placeholder">{PLACEHOLDER[view]}</div>
+          <div className="view-host">
+            {view === "knowledge" ? <KnowledgeView /> : null}
+            {view === "projects" ? <ProjectsView /> : null}
+            {view === "tags" ? <TagsView /> : null}
+            {view === "settings" ? <SettingsView /> : null}
+          </div>
         )}
 
         <section className="chat">
@@ -111,7 +114,7 @@ export function App(): JSX.Element {
       </aside>
 
       <main className="workspace">
-        <DocHeader />
+        {activeNote ? <DocHeader note={activeNote} /> : null}
 
         <section className="pane doc-pane">
           <div className="pane-head">文档视图 · {activeNote?.title ?? "BlockNote"}</div>

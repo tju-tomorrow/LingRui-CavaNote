@@ -45,6 +45,7 @@ interface Draft {
   roles: string[];
   tech: string[];
   faq: FaqItem[];
+  tags: string[];
 }
 
 function toDraft(node: KnowledgeNode): Draft {
@@ -54,6 +55,7 @@ function toDraft(node: KnowledgeNode): Draft {
     roles: [...(node.roles ?? [])],
     tech: Array.isArray(node.meta?.["tech"]) ? [...(node.meta["tech"] as string[])] : [],
     faq: (node.faq ?? []).map((f) => ({ ...f })),
+    tags: [...(node.tags ?? [])],
   };
 }
 
@@ -102,6 +104,7 @@ export function NodeDetailCard() {
       summary: patch.summary ?? fresh.summary,
       roles: patch.roles ?? fresh.roles,
       faq: patch.faq ?? fresh.faq,
+      tags: patch.tags ?? fresh.tags,
       meta,
     });
     markHuman(ydoc, node.id);
@@ -344,6 +347,44 @@ export function NodeDetailCard() {
               </li>
             ) : null}
           </ul>
+        </section>
+      ) : null}
+
+      {/* ---- 标签（横切索引页读的就是它） ---- */}
+      {editing || d.tags.length > 0 ? (
+        <section className="nd-section">
+          <h4>标签</h4>
+          <div className="nd-chips">
+            {d.tags.map((tag, i) => (
+              <span key={`${tag}-${i}`} className="nd-chip">
+                #{tag}
+                {editing ? (
+                  <button
+                    className="nd-chip-del"
+                    type="button"
+                    title="移除"
+                    onClick={() => patch({ tags: d.tags.filter((_, j) => j !== i) })}
+                  >
+                    ✕
+                  </button>
+                ) : null}
+              </span>
+            ))}
+            {editing ? (
+              <input
+                className="nd-chip-input"
+                placeholder="＋ 标签（回车）"
+                aria-label="添加标签"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  const value = e.currentTarget.value.trim().replace(/^#/, "");
+                  if (!value || d.tags.includes(value)) return;
+                  e.currentTarget.value = "";
+                  patch({ tags: [...d.tags, value] });
+                }}
+              />
+            ) : null}
+          </div>
         </section>
       ) : null}
 

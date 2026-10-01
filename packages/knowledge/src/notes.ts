@@ -15,6 +15,7 @@
 import type * as Y from "yjs";
 import { ROOT_NOTES, type NoteId, type NoteMeta } from "./schema";
 
+
 export type { NoteId, NoteMeta };
 
 export function getNotes(doc: Y.Doc): Y.Map<NoteMeta> {
@@ -50,19 +51,146 @@ export function renameNote(doc: Y.Doc, id: NoteId, title: string): void {
   getNotes(doc).set(id, { ...note, title, updatedAt: Date.now() });
 }
 
+function newId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`;
+}
+
 /** 新建一篇笔记（调用方负责把它设为当前笔记） */
-export function createNote(doc: Y.Doc, title = "未命名笔记"): NoteMeta {
-  const id = `note-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`;
+export function createNote(
+  doc: Y.Doc,
+  title = "未命名笔记",
+  parentId: string | null = null,
+): NoteMeta {
+  const id = newId("note");
   const note: NoteMeta = {
     id,
     title,
     fragment: `doc:${id}`,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    order: listNotes(doc).length,
+    order: siblingsOf(doc, parentId).length,
+    parentId,
   };
   upsertNote(doc, note);
   return note;
+}
+
+/** 新建一个分组（文件夹）——只有名字，没有正文 */
+export function createFolder(
+  doc: Y.Doc,
+  title = "新建分组",
+  parentId: string | null = null,
+): NoteMeta {
+  const id = newId("grp");
+  const folder: NoteMeta = {
+    id,
+    title,
+    fragment: "",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    order: siblingsOf(doc, parentId).length,
+    parentId,
+    isFolder: true,
+  };
+  upsertNote(doc, folder);
+  return folder;
+}
+
+// ---------------------------------------------------------------------------
+// 目录树
+// ---------------------------------------------------------------------------
+
+export interface NoteTreeNode {
+  note: NoteMeta;
+  children: NoteTreeNode[];
+  depth: number;
+}
+
+/** 同一层级的兄弟（按 order） */
+export function siblingsOf(doc: Y.Doc, parentId: string | null): NoteMeta[] {
+  return listNotes(doc).filter((n) => (n.parentId ?? null) === parentId);
+}
+
+/**
+ * 构目录树。
+ *
+ * 先按 parentId 从根往下走；`seen` 保证成环时能停下来。
+ * 走不到的节点（parentId 指向不存在的分组、或处于环里）**兜底挂到顶层**——
+ * 宁可层级不对，也不能让笔记从界面上消失。
+ */
+export function buildNoteTree(doc: Y.Doc): NoteTreeNode[] {
+  const all = listNotes(doc);
+  const seen = new Set<string>();
+
+  const childrenOf = (parentId: string | null): NoteMeta[] =>
+    all.filter((n) => (n.parentId ?? null) === parentId && !seen.has(n.id));
+
+  const build = (parentId: string | null, depth: number): NoteTreeNode[] =>
+    childrenOf(parentId).map((note) => {
+      seen.add(note.id);
+      return { note, children: build(note.id, depth + 1), depth };
+    });
+
+  const roots = build(null, 0);
+
+  for (const orphan of all) {
+    if (seen.has(orphan.id)) continue;
+    seen.add(orphan.id);
+    roots.push({ note: orphan, children: build(orphan.id, 1), depth: 0 });
+  }
+
+  return roots;
+}
+
+/** 从根到该笔记的分组路径（面包屑用） */
+export function notePath(doc: Y.Doc, id: NoteId): NoteMeta[] {
+  const path: NoteMeta[] = [];
+  const seen = new Set<string>();
+  let cursor = readNote(doc, id);
+  while (cursor?.parentId) {
+    if (seen.has(cursor.parentId)) break;
+    seen.add(cursor.parentId);
+    const parent = readNote(doc, cursor.parentId);
+    if (!parent) break;
+    path.unshift(parent);
+    cursor = parent;
+  }
+  return path;
+}
+
+/** 移动（换父分组） */
+export function moveNote(doc: Y.Doc, id: NoteId, parentId: string | null): void {
+  const note = readNote(doc, id);
+  if (!note || note.id === parentId) return;
+  // 不能移进自己的子树（会成环）
+  let cursor = parentId;
+  while (cursor) {
+    if (cursor === id) return;
+    cursor = readNote(doc, cursor)?.parentId ?? null;
+  }
+  getNotes(doc).set(id, { ...note, parentId, updatedAt: Date.now() });
+}
+
+/** 设标签 */
+export function setNoteTags(doc: Y.Doc, id: NoteId, tags: string[]): void {
+  const note = readNote(doc, id);
+  if (!note) return;
+  getNotes(doc).set(id, { ...note, tags, updatedAt: Date.now() });
+}
+
+/** 递归删掉一篇笔记/分组及其子孙 */
+export function removeNoteDeep(doc: Y.Doc, id: NoteId): number {
+  const tree = buildNoteTree(doc);
+  const collect = (nodes: NoteTreeNode[]): string[] =>
+    nodes.flatMap((n) => (n.note.id === id ? flattenIds(n) : collect(n.children)));
+  const flattenIds = (node: NoteTreeNode): string[] => [
+    node.note.id,
+    ...node.children.flatMap(flattenIds),
+  ];
+
+  const ids = collect(tree);
+  for (const target of ids) removeNote(doc, target);
+  return ids.length;
 }
 
 /**
