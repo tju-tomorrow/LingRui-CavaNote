@@ -8,8 +8,9 @@ import type { KnowledgeNode } from "@lingrui/knowledge";
 
 /** 画布元素上挂的私有数据 */
 export interface LingRuiCustomData {
-  nodeId: string;
-  kind: string;
+  lingrui?: true;
+  nodeId?: string;
+  kind?: string;
   [k: string]: unknown;
 }
 
@@ -27,6 +28,20 @@ export const NODE_STYLE: Record<string, { stroke: string; background: string; ic
   note: { stroke: "#475569", background: "#f8fafc", icon: "file" },
 };
 
+/** Excalidraw skeleton：能被 convertToExcalidrawElements() 消费的松散结构 */
+export interface ElementSkeleton {
+  type: string;
+  id?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  start?: { id: string };
+  end?: { id: string };
+  label?: { text: string; fontSize?: number };
+  [k: string]: unknown;
+}
+
 export interface SpawnOptions {
   x: number;
   y: number;
@@ -34,14 +49,31 @@ export interface SpawnOptions {
   height?: number;
 }
 
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** 从矩形中心沿方向射线，求与矩形边界的交点 */
+function borderPoint(rect: Rect, dx: number, dy: number): [number, number] {
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  const sx = dx === 0 ? Number.POSITIVE_INFINITY : rect.width / 2 / Math.abs(dx);
+  const sy = dy === 0 ? Number.POSITIVE_INFINITY : rect.height / 2 / Math.abs(dy);
+  const s = Math.min(sx, sy);
+  return [cx + dx * s, cy + dy * s];
+}
+
 /**
- * KnowledgeNode → Excalidraw 元素。
+ * KnowledgeNode → Excalidraw 元素 skeleton。
  * 注意：这里只产生"表现"，身份通过 customData.nodeId 回指 Knowledge。
  */
 export function nodeToExcalidrawElement(
   node: KnowledgeNode,
   opts: SpawnOptions,
-): Record<string, unknown> {
+): ElementSkeleton {
   const style = NODE_STYLE[node.kind] ?? NODE_STYLE.note!;
   const width = opts.width ?? 220;
   const height = opts.height ?? 96;
@@ -61,9 +93,8 @@ export function nodeToExcalidrawElement(
     label: {
       text: node.title,
       fontSize: 18,
-      strokeColor: style.stroke,
     },
-    customData: { nodeId: node.id, kind: node.kind } satisfies LingRuiCustomData,
+    customData: { lingrui: true, nodeId: node.id, kind: node.kind } satisfies LingRuiCustomData,
   };
 }
 
@@ -73,26 +104,55 @@ export function nodeIdOf(element: { customData?: unknown }): string | undefined 
   return d?.nodeId;
 }
 
-/** 关系 → 箭头（Excalidraw 通过 startBinding / endBinding 绑定元素） */
+/**
+ * 关系 → 箭头 skeleton。
+ *
+ * 注意：Excalidraw 的 convertToExcalidrawElements **不会**根据 start/end 绑定自动布线，
+ * 必须显式给 x/y/points，否则所有箭头会堆在原点、长度 100。
+ * 这里按两个矩形的边界计算一条直线箭头，同时保留 start/end 以支持拖动时重新绑定。
+ */
 export function relationToArrow(
-  fromElementId: string,
-  toElementId: string,
+  from: { elementId: string; rect: Rect },
+  to: { elementId: string; rect: Rect },
   label?: string,
-): Record<string, unknown> {
+): ElementSkeleton {
+  const fromCenter: [number, number] = [
+    from.rect.x + from.rect.width / 2,
+    from.rect.y + from.rect.height / 2,
+  ];
+  const toCenter: [number, number] = [
+    to.rect.x + to.rect.width / 2,
+    to.rect.y + to.rect.height / 2,
+  ];
+
+  const dx = toCenter[0] - fromCenter[0];
+  const dy = toCenter[1] - fromCenter[1];
+
+  const start = borderPoint(from.rect, dx, dy);
+  const end = borderPoint(to.rect, -dx, -dy);
+
   return {
     type: "arrow",
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
+    id: `edge-${from.elementId}-${to.elementId}`,
+    x: start[0],
+    y: start[1],
+    width: end[0] - start[0],
+    height: end[1] - start[1],
+    points: [
+      [0, 0],
+      [end[0] - start[0], end[1] - start[1]],
+    ],
     strokeColor: "#1971c2",
     strokeStyle: "solid",
     roughness: 1.2,
-    start: { id: fromElementId },
-    end: { id: toElementId },
-    startBinding: { elementId: fromElementId, focus: 0, gap: 8 },
-    endBinding: { elementId: toElementId, focus: 0, gap: 8 },
+    start: { id: from.elementId },
+    end: { id: to.elementId },
     label: label ? { text: label, fontSize: 14 } : undefined,
-    customData: { kind: "relation" } satisfies Partial<LingRuiCustomData>,
+    customData: { lingrui: true, kind: "relation" },
   };
+}
+
+/** 判断一个 Excalidraw 元素是不是本应用生成的（用于同步时区分用户手绘内容） */
+export function isLingRuiElement(element: { customData?: unknown }): boolean {
+  return Boolean((element.customData as { lingrui?: boolean } | undefined)?.lingrui);
 }

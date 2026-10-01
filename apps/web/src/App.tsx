@@ -1,64 +1,74 @@
 /**
  * LingRui Scribe — App Shell
  *
- * 布局对应 PRD/主界面.png：
- *   ┌──────────────────────────────────────────┐
- *   │ topbar   搜索 / 导出 / 分享 / 用户        │
- *   ├────────┬─────────────────────────────────┤
- *   │ 笔记树 │ 画布（Excalidraw + PixiJS 覆盖）│
- *   │ AI助手 ├─────────────────────────────────┤
- *   │        │ 时间轴 播放/暂停/快进 + 缩略图    │
- *   └────────┴─────────────────────────────────┘
+ * 布局对应 PRD/主界面.png。核心演示点：**左侧文档视图与右侧画布视图共享同一份 Knowledge**。
  *
- * P0 阶段接入点（按顺序）：
- *   1. <CanvasStage/>  ← @excalidraw/excalidraw（packages/vendor/excalidraw）
- *   2. <ChatPanel/>    ← @assistant-ui/react（packages/vendor/assistant-ui）
- *   3. <NotePanel/>    ← @blocknote/react（packages/vendor/blocknote）
- *   4. Y.Doc           ← @lingrui/knowledge + HocuspocusProvider
+ * 接入进度：
+ *   ✅ 文档视图  BlockNote（@blocknote/shadcn），绑定 Y.Doc
+ *   ✅ 画布视图  Excalidraw，从 Y.Doc 派生节点
+ *   ✅ 本地持久化 y-indexeddb（刷新不丢）
+ *   ✅ 远端协同  HocuspocusProvider（VITE_COLLAB_URL 决定是否启用）
+ *   ✅ AI 助手   assistant-ui runtime + 自定义 UI（本地确定性讲解器）
+ *   ⬜ 时间轴    @lingrui/anim 的 sampleAt(script, t)
+ *   ⬜ 吉祥物    VRM（需要 lingrui.vrm 资产）
  */
 import type { JSX } from "react";
+import { NoteEditor } from "./NoteEditor";
+import { CanvasStage } from "./CanvasStage";
+import { ChatPanel } from "./chat/ChatPanel";
+import { useKnowledgeNodes } from "./collab/useKnowledge";
+import { useFocus } from "./state/focus";
 
 export function App(): JSX.Element {
+  const focus = useFocus();
+  const nodes = useKnowledgeNodes();
+  const focusedTitle = focus ? nodes.find((n) => n.id === focus)?.title : undefined;
+
   return (
     <div className="app">
       <header className="topbar">
         <span className="brand">LingRui</span>
         <div className="search">搜索笔记、知识、标签…</div>
+        {focusedTitle ? <span className="focus-pill">已聚焦：{focusedTitle}</span> : null}
       </header>
 
       <aside className="sidebar">
         <nav className="tree">
-          {/* TODO(P0): 由 packages/knowledge 的 Y.Doc 驱动 */}
-          <div>笔记</div>
-          <div style={{ paddingLeft: 12, color: "var(--muted)" }}>AI 基础与架构</div>
-          <div style={{ paddingLeft: 24 }}>一次请求的完整旅程</div>
-          <div style={{ paddingLeft: 24, color: "var(--muted)" }}>网关的作用与实现原理</div>
+          <div className="tree-item">笔记</div>
+          <div className="tree-item" style={{ paddingLeft: 18 }}>
+            AI 基础与架构
+          </div>
+          <div className="tree-item active" style={{ paddingLeft: 30 }}>
+            一次请求的完整旅程
+          </div>
+          <div className="tree-item" style={{ paddingLeft: 30, color: "var(--muted)" }}>
+            网关的作用与实现原理
+          </div>
+          <div className="tree-item" style={{ paddingLeft: 30, color: "var(--muted)" }}>
+            Redis 的应用场景与数据结构
+          </div>
         </nav>
 
         <section className="chat">
-          {/* TODO(P0): assistant-ui Thread + AI SDK useChat */}
-          <div style={{ color: "var(--muted)" }}>
-            你可以点击画布中的节点，我会为你生成详细的解释笔记。
-          </div>
-          <input className="chat-input" placeholder="向 LingRui 询问关于这个知识点…" />
+          <ChatPanel />
         </section>
       </aside>
 
-      <main className="main">
-        <section className="canvas">
-          {/* TODO(P0): <Excalidraw/> 底层 + <PixiOverlay/> 实时层 + <VrmMascot/> */}
-          <div className="canvas-placeholder">
-            画布层
-            <br />
-            Excalidraw（手绘皮肤） + PixiJS（实时数据流） + VRM（吉祥物）
-          </div>
+      <main className="workspace">
+        <section className="pane doc-pane">
+          <div className="pane-head">文档视图 · BlockNote</div>
+          <NoteEditor />
+        </section>
+
+        <section className="pane canvas">
+          <CanvasStage />
         </section>
 
         <footer className="timeline">
-          {/* TODO(P2): packages/anim 的 sampleAt(script, t) 驱动 */}
+          {/* TODO(P2): @lingrui/anim 的 sampleAt(script, t) 驱动 */}
           <span>▶</span>
           <span>⏸</span>
-          <span>00:08 / 01:42</span>
+          <span>00:00 / 01:42</span>
           <div className="track">
             <i />
           </div>

@@ -85,28 +85,32 @@ export function createKnowledgeDoc(meta: Pick<KnowledgeDocMeta, "id" | "title">)
     createdAt: now,
     updatedAt: now,
   });
-  doc.getMap<Y.Map<unknown>>(ROOT_NODES);
+  doc.getMap<KnowledgeNode>(ROOT_NODES);
   doc.getArray<NodeId>(ROOT_ORDER);
   return doc;
 }
 
-export function getNodes(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
-  return doc.getMap<Y.Map<unknown>>(ROOT_NODES);
+export function getNodes(doc: Y.Doc): Y.Map<KnowledgeNode> {
+  return doc.getMap<KnowledgeNode>(ROOT_NODES);
 }
 
 export function getOrder(doc: Y.Doc): Y.Array<NodeId> {
   return doc.getArray<NodeId>(ROOT_ORDER);
 }
 
+/**
+ * 节点以**普通 JSON 对象**存在 Y.Map 里。
+ * 好处：读出来就是 KnowledgeNode，不用递归 toJSON；
+ * 代价：并发改同一个节点是整对象 last-write-wins（P0 可接受，P1 再拆成 Y.Map 字段）。
+ */
 export function readNode(doc: Y.Doc, id: NodeId): KnowledgeNode | undefined {
-  const raw = getNodes(doc).get(id);
-  return raw ? (raw.toJSON() as unknown as KnowledgeNode) : undefined;
+  return getNodes(doc).get(id);
 }
 
 export function upsertNode(doc: Y.Doc, node: KnowledgeNode): void {
   const nodes = getNodes(doc);
   doc.transact(() => {
-    nodes.set(node.id, node as unknown as Y.Map<unknown>);
+    nodes.set(node.id, node);
     const order = getOrder(doc);
     if (!order.toArray().includes(node.id)) order.push([node.id]);
   });
@@ -139,9 +143,8 @@ export function bindCanvas(doc: Y.Doc, id: NodeId, canvas: CanvasBinding): void 
 
 /** 反查：画布元素 id → 节点 id */
 export function nodeIdByCanvasElement(doc: Y.Doc, elementId: string): NodeId | undefined {
-  for (const [id, raw] of getNodes(doc)) {
-    const n = raw.toJSON() as unknown as KnowledgeNode;
-    if (n.canvas?.elementId === elementId) return id;
+  for (const [id, node] of getNodes(doc)) {
+    if (node.canvas?.elementId === elementId) return id;
   }
   return undefined;
 }

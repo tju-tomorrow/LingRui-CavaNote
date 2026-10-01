@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root {
   --bg: #ffffff;
   --panel: #fafafa;
@@ -23,7 +25,7 @@ body,
 
 .app {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 280px 1fr;
   grid-template-rows: 48px 1fr;
   grid-template-areas:
     "top top"
@@ -70,33 +72,147 @@ body,
   font-size: 13px;
 }
 
+.tree-item {
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.tree-item.active {
+  background: #eef0ff;
+  color: var(--accent);
+}
+
 .chat {
   border-top: 1px solid var(--border);
   padding: 12px;
   font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  max-height: 46vh;
+}
+
+.focus-pill {
+  font-size: 12px;
+  color: var(--accent);
+  background: #eef0ff;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.chat-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.chat-msg {
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-msg-user {
+  align-self: flex-end;
+  max-width: 90%;
+  background: #eef0ff;
+  color: #2b2b6b;
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+
+.chat-msg-assistant {
+  color: var(--text);
+}
+
+.chat-composer {
+  display: flex;
+  gap: 6px;
+  flex: none;
 }
 
 .chat-input {
-  margin-top: 8px;
-  width: 100%;
+  flex: 1;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 13px;
+  min-width: 0;
 }
 
-.main {
+.chat-send {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.chat-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 工作区：文档视图 | 画布视图，共享同一份 Knowledge */
+.workspace {
   grid-area: main;
   display: grid;
+  grid-template-columns: minmax(320px, 42%) 1fr;
   grid-template-rows: 1fr auto;
   min-height: 0;
+}
+
+.pane {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.pane-head {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.doc-pane {
+  border-right: 1px solid var(--border);
+}
+
+.editor-host {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 16px 40px;
 }
 
 .canvas {
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 1px 1px, #e8e8e8 1px, transparent 0) 0 0 / 24px 24px;
+  padding: 0;
+  background: radial-gradient(circle at 1px 1px, #e8e8e8 1px, transparent 0) 0 0 / 24px 24px;
+}
+
+.excalidraw-host {
+  position: absolute;
+  inset: 0;
 }
 
 .canvas-placeholder {
@@ -112,6 +228,7 @@ body,
 }
 
 .timeline {
+  grid-column: 1 / -1;
   border-top: 1px solid var(--border);
   padding: 10px 16px;
   display: flex;
@@ -133,4 +250,9 @@ body,
   width: 32%;
   border-radius: 2px;
   background: var(--accent);
+}
+
+/* BlockNote 在窄栏里的边距收敛 */
+.editor-host .bn-container {
+  --bn-colors-editor-background: transparent;
 }

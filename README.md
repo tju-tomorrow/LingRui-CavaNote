@@ -57,9 +57,28 @@ docs/
 
 ```bash
 bun install
-bun run dev          # 前端
-bun run dev:collab   # 协同服务（需要 Postgres + Redis）
+bun run dev          # 前端 → http://localhost:5173
+bun run dev:collab   # 协同服务（需 Postgres + Redis）
+bun run typecheck
+bun run test
 ```
+
+前端默认**不需要任何后端**：笔记与画布存在浏览器 IndexedDB 里，刷新不丢。
+要多端实时，把 `apps/web/.env.example` 复制为 `.env.local` 并指向协同服务。
+
+## 当前进度（P0 已完成）
+
+| 能力 | 状态 |
+|---|---|
+| 文档视图（BlockNote，绑定 Y.Doc） | ✅ |
+| 画布视图（Excalidraw，从 Knowledge 派生） | ✅ |
+| 点击画布节点 → 追问该节点 | ✅ |
+| 本地持久化（刷新不丢） | ✅ |
+| 多人实时（HocuspocusProvider，可选） | ✅ 代码就绪，需启服务 |
+| AI 助手（assistant-ui runtime + 确定性讲解器） | ✅ 无真实 LLM |
+| 时间轴 / 吉祥物 / 导出 | ⬜ P2–P4 |
+
+已知欠账与原因见 [ADR-0009](./docs/adr/0009-canvas-and-runtime-sync.md)。
 
 ## 缝合策略
 
