@@ -97,7 +97,17 @@
   border-radius: 4px;
 }
 
-.tl .tl-shot-title {
+.tl /* 真实画布截图（看过的分镜）*/
+.tl-shot-thumb {
+  width: 100%;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+  background: #fff;
+}
+
+.tl-shot-title {
   font-size: 11px;
   color: var(--text, #1e1e1e);
   max-width: 96px;

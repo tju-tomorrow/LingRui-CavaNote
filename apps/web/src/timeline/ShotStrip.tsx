@@ -4,9 +4,11 @@
  * 每个分镜 = 一章；缩略图由 `sampleAt(script, shot.startT)` 现场画成 mini SVG
  * （节点矩形 + 连线，坐标归一化）。点击 = seek 到该章起点。
  */
+import { useEffect, useMemo, useState } from "react";
 import { sampleAt, shotAt, type SceneScript, type Shot } from "@lingrui/anim";
 import { formatTime, player, usePlayer } from "../state/player";
 import { useKnowledgeChapters } from "../collab/useKnowledge";
+import { captureThumb, clearThumbs, subscribeThumbs, thumbOf } from "./thumbs";
 
 const W = 88;
 const H = 48;
@@ -62,31 +64,56 @@ export function ShotStrip() {
   // 优先 Y.Doc 里的分镜（可被人工编辑、可持久化）；还没落过盘时退回内存推导。
   // Chapter.startT 是可选的，这里归一成 Shot（startT 必填）给 shotAt / seek 用。
   const persisted = useKnowledgeChapters();
-  const chapters: Shot[] = (persisted.length > 0 ? persisted : memory).map((c) => ({
-    id: c.id,
-    title: c.title,
-    startT: c.startT ?? 0,
-  }));
+  const chapters: Shot[] = useMemo(
+    () =>
+      (persisted.length > 0 ? persisted : memory).map((c) => ({
+        id: c.id,
+        title: c.title,
+        startT: c.startT ?? 0,
+      })),
+    [persisted, memory],
+  );
+
+  const current = script ? shotAt(chapters, t) : undefined;
+
+  // 缩略图：播到/拖到某个分镜时截一张真图（懒截图，见 thumbs.ts）
+  const [, bump] = useState(0);
+  useEffect(() => subscribeThumbs(() => bump((n) => n + 1)), []);
+  useEffect(() => clearThumbs(), [chapters]);
+  useEffect(() => {
+    if (!current) return;
+    // 等一帧：让画布先把这一帧的动画状态画完，截出来才是「首帧」
+    const raf = requestAnimationFrame(() => void captureThumb(current.id));
+    return () => cancelAnimationFrame(raf);
+  }, [current?.id]);
+
   if (!script || chapters.length === 0) return null;
-  const current = shotAt(chapters, t);
 
   return (
     <div className="tl-shots">
-      {chapters.map((c, i) => (
-        <button
-          key={c.id}
-          type="button"
-          className={`tl-shot${current?.id === c.id ? " active" : ""}`}
-          onClick={() => player.seek(c.startT)}
-          title={`跳到「${c.title}」`}
-        >
-          <MiniShot script={script} t={c.startT} />
-          <span className="tl-shot-title">
-            {i + 1}. {c.title}
-          </span>
-          <span className="tl-shot-time">{formatTime(c.startT)}</span>
-        </button>
-      ))}
+      {chapters.map((c, i) => {
+        const thumb = thumbOf(c.id);
+        return (
+          <button
+            key={c.id}
+            type="button"
+            className={`tl-shot${current?.id === c.id ? " active" : ""}`}
+            onClick={() => player.seek(c.startT)}
+            title={`跳到「${c.title}」`}
+          >
+            {/* 看过的分镜用真实画布截图；没看过的退回 SVG 迷你示意图 */}
+            {thumb ? (
+              <img className="tl-shot-thumb" src={thumb} alt="" />
+            ) : (
+              <MiniShot script={script} t={c.startT} />
+            )}
+            <span className="tl-shot-title">
+              {i + 1}. {c.title}
+            </span>
+            <span className="tl-shot-time">{formatTime(c.startT)}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
