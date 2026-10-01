@@ -34,8 +34,6 @@
 - Excalidraw 的包之间用**已发布 npm 版本**互引（`0.18.0`），不是 workspace link，所以 vendor 的
   `element`/`common`/`math`/`utils` 不被直接使用，需 alias 才能生效。
 
-详见 [ADR-0008](../../docs/adr/0008-vendor-not-in-build-path.md)。
-
 ## License 兼容器（相对 AGPL-3.0 项目）
 
 | License | 能否 copy 进本项目 | 备注 |
