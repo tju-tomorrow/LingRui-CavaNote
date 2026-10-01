@@ -35,7 +35,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "==> clone $REPO @ $REF"
-git clone --quiet --filter=blob:none --no-checkout "$REPO" "$TMP/repo"
+git clone --quiet --filter=blob:none --no-checkout --single-branch --no-tags "$REPO" "$TMP/repo"
 git -C "$TMP/repo" checkout --quiet "$REF"
 SHA="$(git -C "$TMP/repo" rev-parse HEAD)"
 DATE="$(date +%F)"
@@ -46,6 +46,11 @@ for f in LICENSE LICENSE.md LICENSE.txt COPYING COPYING.txt LICENSE-MPL.txt; do
 done
 
 mkdir -p "$DEST"
+
+# 上游 LICENSE 必须随源码一起拷（规则见根 VENDOR.md）
+if [ -n "$LICENSE_FILE" ]; then
+  cp "$TMP/repo/$LICENSE_FILE" "$DEST/$LICENSE_FILE"
+fi
 
 if [ ${#PATHS[@]} -eq 0 ]; then
   echo "==> copy whole tree -> $DEST"
@@ -72,6 +77,8 @@ cat > "$DEST/VENDOR.md" <<EOF
 
 > 本目录为上游源码副本。**不要在此直接改业务逻辑**，改动放到 \`packages/$NAME\` 封装层或 \`patch/\`。
 > 升级方式：重新运行 \`scripts/vendor.sh\`，并更新根 \`VENDOR.md\` 登记表。
+>
+> 注意：本目录**不在本仓 bun workspace 内**（见 ADR-0008），属于参考/定制源码，不参与主构建。
 EOF
 
 echo

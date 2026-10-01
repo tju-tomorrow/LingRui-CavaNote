@@ -1,0 +1,362 @@
+import {
+  BlockFromConfigNoChildren,
+  BlockMapping,
+  COLORS_DEFAULT,
+  createPageBreakBlockConfig,
+  DefaultBlockSchema,
+  DefaultProps,
+  PlainContent,
+  UnreachableCaseError,
+} from "@blocknote/core";
+import { multiColumnSchema } from "@blocknote/xl-multi-column";
+import { getImageDimensions } from "@shared/util/imageUtil.js";
+import {
+  CheckBox,
+  Table as DocxTable,
+  ExternalHyperlink,
+  ImageRun,
+  IParagraphOptions,
+  PageBreak,
+  Paragraph,
+  ParagraphChild,
+  ShadingType,
+  TableCell,
+  TableRow,
+  TextRun,
+} from "docx";
+import { clampListLevel } from "../listLevels.js";
+import { Table } from "../util/Table.js";
+
+type BSchema = DefaultBlockSchema & {
+  pageBreak: ReturnType<typeof createPageBreakBlockConfig>;
+} & typeof multiColumnSchema.blockSchema;
+
+function blockPropsToStyles(
+  props: Partial<DefaultProps>,
+  colors: typeof COLORS_DEFAULT,
+): IParagraphOptions {
+  return {
+    shading:
+      props.backgroundColor === "default" || !props.backgroundColor
+        ? undefined
+        : {
+            type: ShadingType.CLEAR,
+            fill: (() => {
+              const color = colors[props.backgroundColor]?.background;
+              if (!color) {
+                return undefined;
+              }
+              return color.slice(1);
+            })(),
+          },
+    run:
+      props.textColor === "default" || !props.textColor
+        ? undefined
+        : {
+            color: (() => {
+              const color = colors[props.textColor]?.text;
+              if (!color) {
+                return undefined;
+              }
+              return color.slice(1);
+            })(),
+          },
+    alignment:
+      !props.textAlignment || props.textAlignment === "left"
+        ? undefined
+        : props.textAlignment === "center"
+          ? "center"
+          : props.textAlignment === "right"
+            ? "right"
+            : props.textAlignment === "justify"
+              ? "distribute"
+              : (() => {
+                  throw new UnreachableCaseError(props.textAlignment);
+                })(),
+  };
+}
+
+const codeMapping = (
+  block: BlockFromConfigNoChildren<BSchema["codeBlock"], any, any>,
+) => {
+  // Code blocks hold plain content: at most a single unstyled text item.
+  const [textItem, ...excessItems] = block.content as PlainContent;
+  if (excessItems.length > 0 || (textItem && !("text" in textItem))) {
+    throw new Error("expected plain block content to be a single text item");
+  }
+  const textContent = textItem?.text ?? "";
+
+  return new Paragraph({
+    style: "SourceCode",
+    children: [
+      ...textContent.split("\n").map((line, index) => {
+        return new TextRun({
+          text: line,
+          break: index > 0 ? 1 : 0,
+        });
+      }),
+    ],
+  });
+};
+
+export const docxBlockMappingForDefaultSchema: BlockMapping<
+  BSchema,
+  any,
+  any,
+  | Promise<Paragraph[] | Paragraph | DocxTable>
+  | Paragraph[]
+  | Paragraph
+  | DocxTable,
+  ParagraphChild
+> = {
+  paragraph: (block, exporter) => {
+    return new Paragraph({
+      ...blockPropsToStyles(block.props, exporter.options.colors),
+      children: exporter.transformInlineContent(block.content),
+    });
+  },
+  toggleListItem: (block, exporter) => {
+    return new Paragraph({
+      ...blockPropsToStyles(block.props, exporter.options.colors),
+      children: [
+        new TextRun({
+          children: ["> "],
+        }),
+        ...exporter.transformInlineContent(block.content),
+      ],
+    });
+  },
+  numberedListItem: (block, exporter, nestingLevel, numberingInstance) => {
+    return new Paragraph({
+      ...blockPropsToStyles(block.props, exporter.options.colors),
+      children: exporter.transformInlineContent(block.content),
+      numbering: {
+        reference: "blocknote-numbered-list",
+        level: clampListLevel(nestingLevel),
+        // Each distinct list gets its own instance so separate lists don't
+        // continue each other's numbering (see DOCXExporter.transformBlocks).
+        instance: numberingInstance,
+      },
+    });
+  },
+  bulletListItem: (block, exporter, nestingLevel, numberingInstance) => {
+    return new Paragraph({
+      ...blockPropsToStyles(block.props, exporter.options.colors),
+      children: exporter.transformInlineContent(block.content),
+      numbering: {
+        reference: "blocknote-bullet-list",
+        level: clampListLevel(nestingLevel),
+        instance: numberingInstance,
+      },
+    });
+  },
+  checkListItem: (block, exporter) => {
+    return new Paragraph({
+      ...blockPropsToStyles(block.props, exporter.options.colors),
+      children: [
+        new CheckBox({ checked: block.props.checked }),
+        new TextRun({
+          children: [" "],
+        }),
+        ...exporter.transformInlineContent(block.content),
+      ],
+    });
+  },
+  heading: (block, exporter) => {
+    return new Paragraph({
+      ...blockPropsToStyles(block.props, exporter.options.colors),
+      children: exporter.transformInlineContent(block.content),
+      heading: `Heading${block.props.level as 1 | 2 | 3 | 4 | 5 | 6}`,
+    });
+  },
+  quote: (block, exporter) => {
+    return new Paragraph({
+      style: "BlockQuote",
+      ...blockPropsToStyles(block.props, exporter.options.colors),
+      children: exporter.transformInlineContent(block.content),
+    });
+  },
+  audio: (block, exporter) => {
+    if (!block.props.url && !block.props.name) {
+      // An un-uploaded media placeholder ("Add file") is an editing
+      // affordance, not document content - it exports as nothing.
+      return [];
+    }
+    return [
+      file(block.props, exporter.dictionary.open_audio_file, exporter),
+      ...caption(block.props, exporter),
+    ];
+  },
+  video: (block, exporter) => {
+    if (!block.props.url && !block.props.name) {
+      // An un-uploaded media placeholder ("Add file") is an editing
+      // affordance, not document content - it exports as nothing.
+      return [];
+    }
+    return [
+      file(block.props, exporter.dictionary.open_video_file, exporter),
+      ...caption(block.props, exporter),
+    ];
+  },
+  file: (block, exporter) => {
+    if (!block.props.url && !block.props.name) {
+      // An un-uploaded media placeholder ("Add file") is an editing
+      // affordance, not document content - it exports as nothing.
+      return [];
+    }
+    return [
+      file(block.props, exporter.dictionary.open_file, exporter),
+      ...caption(block.props, exporter),
+    ];
+  },
+  codeBlock: codeMapping,
+  pageBreak: () => {
+    return new Paragraph({
+      children: [new PageBreak()],
+    });
+  },
+  divider: () => {
+    return new Paragraph({
+      border: {
+        top: {
+          color: "auto",
+          space: 1,
+          style: "single",
+          size: 1,
+        },
+      },
+    });
+  },
+  column: (block, _exporter, _nestingLevel, _numberedListIndex, children) => {
+    return new TableCell({
+      width: {
+        size: `${block.props.width * 100}%`,
+        type: "pct",
+      },
+      children: (children || []).flatMap((child) => {
+        if (Array.isArray(child)) {
+          return child;
+        }
+
+        return [child];
+      }),
+    }) as any;
+  },
+  columnList: (
+    _block,
+    _exporter,
+    _nestingLevel,
+    _numberedListIndex,
+    children,
+  ) => {
+    return new DocxTable({
+      layout: "autofit",
+      borders: {
+        bottom: { style: "nil" },
+        top: { style: "nil" },
+        left: { style: "nil" },
+        right: { style: "nil" },
+        insideHorizontal: { style: "nil" },
+        insideVertical: { style: "nil" },
+      },
+      rows: [
+        new TableRow({
+          children: (children as unknown as TableCell[]).map(
+            (cell, _index, children) => {
+              return new TableCell({
+                width: {
+                  size: `${(parseFloat(`${cell.options.width?.size || "100%"}`) / (children.length * 100)) * 100}%`,
+                  type: "pct",
+                },
+                children: cell.options.children,
+              });
+            },
+          ),
+        }),
+      ],
+    });
+  },
+  image: async (block, exporter) => {
+    if (!block.props.url) {
+      // An image without a URL is the editor's un-uploaded placeholder ("Add
+      // image"), not document content - it exports as nothing. (The typst
+      // exporter renders a labelled placeholder figure when a name is present;
+      // this format has no placeholder rendering, so any url-less image is
+      // omitted.)
+      return [];
+    }
+    const blob = await exporter.resolveFile(block.props.url);
+    const { width, height } = await getImageDimensions(blob);
+
+    return [
+      new Paragraph({
+        ...blockPropsToStyles(block.props, exporter.options.colors),
+        children: [
+          new ImageRun({
+            data: await blob.arrayBuffer(),
+            // it would be nicer to set the actual data type here, but then we'd need to use a mime type / image type
+            // detector. atm passing gif does not seem to be causing issues as the "type" is mainly used by docxjs internally
+            // (i.e.: to make sure it's not svg)
+            type: "gif",
+            altText: block.props.caption
+              ? {
+                  description: block.props.caption,
+                  name: block.props.caption,
+                  title: block.props.caption,
+                }
+              : undefined,
+            transformation: {
+              width: block.props.previewWidth || width,
+              height: ((block.props.previewWidth || width) / width) * height,
+            },
+          }),
+        ],
+      }),
+      ...caption(block.props, exporter),
+    ];
+  },
+  table: (block, exporter) => {
+    return Table(block.content, exporter);
+  },
+};
+
+function file(
+  props: Partial<DefaultProps & { name: string; url: string }>,
+  defaultText: string,
+  exporter: any,
+) {
+  return new Paragraph({
+    ...blockPropsToStyles(props, exporter.options.colors),
+    children: [
+      new ExternalHyperlink({
+        children: [
+          new TextRun({
+            text: props.name || defaultText,
+            style: "Hyperlink",
+          }),
+        ],
+        link: props.url!,
+      }),
+    ],
+  });
+}
+
+function caption(
+  props: Partial<DefaultProps & { caption: string }>,
+  exporter: any,
+) {
+  if (!props.caption) {
+    return [];
+  }
+  return [
+    new Paragraph({
+      ...blockPropsToStyles(props, exporter.options.colors),
+      children: [
+        new TextRun({
+          text: props.caption,
+        }),
+      ],
+      style: "Caption",
+    }),
+  ];
+}

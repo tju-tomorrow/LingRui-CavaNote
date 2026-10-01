@@ -1,0 +1,359 @@
+import {
+  addInlineContentAttributes,
+  addInlineContentKeyboardShortcuts,
+  BlockNoteEditor,
+  camelToDataKebab,
+  createInternalInlineContentSpec,
+  CustomInlineContentConfig,
+  CustomInlineContentImplementation,
+  Extension,
+  ExtensionFactoryInstance,
+  getInlineContentParseRules,
+  InlineContentFromConfig,
+  InlineContentSchemaWithInlineContent,
+  InlineContentSpec,
+  inlineContentToNodes,
+  nodeToCustomInlineContent,
+  nonFormattingMarks,
+  PartialCustomInlineContentFromConfig,
+  Props,
+  PropSchema,
+  propsToAttributes,
+  StyleSchema,
+} from "@blocknote/core";
+import { Node } from "@tiptap/core";
+import {
+  NodeViewProps,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  useReactNodeView,
+} from "@tiptap/react";
+// import { useReactNodeView } from "@tiptap/react/dist/packages/react/src/useReactNodeView";
+import { FC, JSX } from "react";
+import { renderToDOMSpec } from "./@util/ReactRenderUtil.js";
+// this file is mostly analogoues to `customBlocks.ts`, but for React blocks
+
+export type ReactCustomInlineContentRenderProps<
+  T extends CustomInlineContentConfig,
+  S extends StyleSchema,
+> = {
+  inlineContent: InlineContentFromConfig<T, S>;
+  updateInlineContent: (
+    update: PartialCustomInlineContentFromConfig<T, S>,
+  ) => void;
+  editor: BlockNoteEditor<
+    any,
+    InlineContentSchemaWithInlineContent<T["type"], T>,
+    S
+  >;
+  contentRef: (node: HTMLElement | null) => void;
+  /**
+   * The ProseMirror node backing this inline content.
+   */
+  node: NodeViewProps["node"];
+  /**
+   * Returns this inline content's position in the document. When rendered
+   * outside the editor (i.e. serialized to HTML) this is a no-op that returns
+   * `undefined`.
+   */
+  getPos: NodeViewProps["getPos"];
+};
+
+// extend BlockConfig but use a React render function
+export type ReactInlineContentImplementation<
+  T extends CustomInlineContentConfig,
+  // I extends InlineContentSchema,
+  S extends StyleSchema,
+> = {
+  render: FC<ReactCustomInlineContentRenderProps<T, S>>;
+  toExternalHTML?: FC<ReactCustomInlineContentRenderProps<T, S>>;
+} & Omit<CustomInlineContentImplementation<T, S>, "render" | "toExternalHTML">;
+
+// Function that adds a wrapper with necessary classes and attributes to the
+// component returned from a custom inline content's 'render' function, to
+// ensure no data is lost on internal copy & paste.
+export function InlineContentWrapper<
+  IType extends string,
+  PSchema extends PropSchema,
+>(props: {
+  children: JSX.Element;
+  inlineContentType: IType;
+  inlineContentProps: Props<PSchema>;
+  propSchema: PSchema;
+}) {
+  return (
+    // Creates inline content section element
+    <NodeViewWrapper
+      as={"span"}
+      // Sets inline content section class
+      className={"bn-inline-content-section"}
+      // Sets content type attribute
+      data-inline-content-type={props.inlineContentType}
+      // Adds props as HTML attributes in kebab-case with "data-" prefix. Skips
+      // props set to their default values.
+      {...Object.fromEntries(
+        Object.entries(props.inlineContentProps)
+          .filter(([prop, value]) => {
+            const spec = props.propSchema[prop];
+            return value !== spec.default;
+          })
+          .map(([prop, value]) => {
+            return [camelToDataKebab(prop), value];
+          }),
+      )}
+    >
+      {props.children}
+    </NodeViewWrapper>
+  );
+}
+
+/**
+ * Creates a custom inline content specification for use with React. This is the
+ * React counterpart to the vanilla `createInlineContentSpec` and lets you define
+ * custom inline content types (e.g., mentions, tags) using React components for
+ * rendering.
+ *
+ * @param inlineContentConfig - The inline content type configuration, including
+ * its `type` name, `propSchema`, and `content` mode (`"styled"`, `"plain"`, or
+ * `"none"`).
+ * @param inlineContentImplementation - The React implementation, including a
+ * `render` component and optionally a `toExternalHTML` component and `parse`
+ * rules.
+ * @param extensions - Optional editor extensions registered alongside this
+ * inline content (e.g. for keyboard handling), mirroring block specs.
+ * @returns An `InlineContentSpec` that can be passed to the editor's schema.
+ */
+export function createReactInlineContentSpec<
+  const T extends CustomInlineContentConfig,
+  // I extends InlineContentSchema,
+  S extends StyleSchema,
+>(
+  inlineContentConfig: T,
+  inlineContentImplementation: ReactInlineContentImplementation<T, S>,
+  extensions?: (Extension | ExtensionFactoryInstance)[],
+): InlineContentSpec<T> {
+  const node = Node.create({
+    name: inlineContentConfig.type as T["type"],
+    inline: true,
+    group: "inline",
+    selectable: inlineContentConfig.content !== "none",
+    atom: inlineContentConfig.content === "none",
+    draggable: inlineContentImplementation.meta?.draggable,
+    code: inlineContentImplementation.meta?.code,
+    content: (inlineContentConfig.content === "styled"
+      ? "inline*"
+      : inlineContentConfig.content === "plain"
+        ? "text*"
+        : "") as T["content"] extends "styled" ? "inline*" : "",
+    // "plain" inline content holds unstyled text, so it disallows formatting
+    // marks (mirroring "plain" blocks). It still allows the non-formatting marks
+    // (comments and suggestions/diffs), which annotate content without changing
+    // it and are ignored by the content model. `nonFormattingMarks` resolves the
+    // group only when at least one such mark is registered, so a plain inline
+    // content in an editor without any of them doesn't reference an empty
+    // (unknown) mark group.
+    marks() {
+      return inlineContentConfig.content === "plain"
+        ? nonFormattingMarks(this.editor)
+        : undefined;
+    },
+
+    addAttributes() {
+      return propsToAttributes(inlineContentConfig.propSchema);
+    },
+
+    addKeyboardShortcuts() {
+      return addInlineContentKeyboardShortcuts(inlineContentConfig);
+    },
+
+    parseHTML() {
+      return getInlineContentParseRules(
+        inlineContentConfig,
+        inlineContentImplementation.parse,
+        inlineContentImplementation.parseContent,
+      );
+    },
+
+    renderHTML({ node }) {
+      const editor = this.options.editor;
+
+      const ic = nodeToCustomInlineContent(
+        node,
+        editor.schema.inlineContentSchema,
+        editor.schema.styleSchema,
+      ) as any as InlineContentFromConfig<T, S>; // TODO: fix cast
+      const Content =
+        inlineContentImplementation.toExternalHTML ||
+        inlineContentImplementation.render;
+      const output = renderToDOMSpec(
+        (ref) => (
+          <Content
+            contentRef={(element) => {
+              ref(element);
+              if (element) {
+                element.dataset.editable = "";
+              }
+            }}
+            inlineContent={ic}
+            updateInlineContent={() => {
+              // No-op
+            }}
+            editor={editor}
+            node={node}
+            getPos={() => undefined}
+          />
+        ),
+        editor,
+      );
+
+      return addInlineContentAttributes(
+        output,
+        inlineContentConfig.type,
+        node.attrs as Props<T["propSchema"]>,
+        inlineContentConfig.propSchema,
+      );
+    },
+
+    addNodeView() {
+      const editor: BlockNoteEditor<any, any, any> = this.options.editor;
+      return (props) =>
+        ReactNodeViewRenderer(
+          (props: NodeViewProps) => {
+            const ref = useReactNodeView().nodeViewContentRef;
+
+            if (!ref) {
+              throw new Error("nodeViewContentRef is not set");
+            }
+
+            const Content = inlineContentImplementation.render;
+            return (
+              <InlineContentWrapper
+                inlineContentProps={props.node.attrs as Props<T["propSchema"]>}
+                inlineContentType={inlineContentConfig.type}
+                propSchema={inlineContentConfig.propSchema}
+              >
+                <Content
+                  contentRef={(element) => {
+                    ref(element);
+                    if (element) {
+                      element.dataset.editable = "";
+                    }
+                  }}
+                  editor={editor}
+                  node={props.node}
+                  getPos={props.getPos}
+                  inlineContent={
+                    nodeToCustomInlineContent(
+                      props.node,
+                      editor.schema.inlineContentSchema,
+                      editor.schema.styleSchema,
+                    ) as any as InlineContentFromConfig<T, S> // TODO: fix cast
+                  }
+                  updateInlineContent={(update) => {
+                    const content = inlineContentToNodes(
+                      [update],
+                      editor.pmSchema,
+                    );
+
+                    const pos = props.getPos();
+
+                    if (pos === undefined) {
+                      return;
+                    }
+
+                    editor.transact((tr) =>
+                      tr.replaceWith(pos, pos + props.node.nodeSize, content),
+                    );
+                  }}
+                />
+              </InlineContentWrapper>
+            );
+          },
+          {
+            className: "bn-ic-react-node-view-renderer",
+            as: "span",
+            // contentDOMElementTag: "span", (requires tt upgrade)
+          },
+        )(props);
+    },
+  });
+
+  return createInternalInlineContentSpec(
+    inlineContentConfig as CustomInlineContentConfig,
+    {
+      ...inlineContentImplementation,
+      node,
+      render(inlineContent, updateInlineContent, editor) {
+        const Content = inlineContentImplementation.render;
+        // Rendered outside the editor (serialization), so there's no live node
+        // view - derive the node from the content and stub out `getPos`.
+        const node = inlineContentToNodes(
+          [inlineContent] as any,
+          editor.pmSchema,
+        )[0];
+        const output = renderToDOMSpec((ref) => {
+          return (
+            <InlineContentWrapper
+              inlineContentProps={inlineContent.props}
+              inlineContentType={inlineContentConfig.type}
+              propSchema={inlineContentConfig.propSchema}
+            >
+              <Content
+                contentRef={(element) => {
+                  ref(element);
+                  if (element) {
+                    element.dataset.editable = "";
+                  }
+                }}
+                editor={editor}
+                inlineContent={inlineContent}
+                updateInlineContent={updateInlineContent}
+                node={node}
+                getPos={() => undefined}
+              />
+            </InlineContentWrapper>
+          );
+        }, editor);
+        return output;
+      },
+      toExternalHTML(inlineContent, editor) {
+        const Content =
+          inlineContentImplementation.toExternalHTML ||
+          inlineContentImplementation.render;
+        // Rendered outside the editor (serialization), so there's no live node
+        // view - derive the node from the content and stub out `getPos`.
+        const node = inlineContentToNodes(
+          [inlineContent] as any,
+          editor.pmSchema,
+        )[0];
+        const output = renderToDOMSpec((ref) => {
+          return (
+            <InlineContentWrapper
+              inlineContentProps={inlineContent.props}
+              inlineContentType={inlineContentConfig.type}
+              propSchema={inlineContentConfig.propSchema}
+            >
+              <Content
+                contentRef={(element) => {
+                  ref(element);
+                  if (element) {
+                    element.dataset.editable = "";
+                  }
+                }}
+                editor={editor}
+                inlineContent={inlineContent}
+                updateInlineContent={() => {
+                  // no-op
+                }}
+                node={node}
+                getPos={() => undefined}
+              />
+            </InlineContentWrapper>
+          );
+        }, editor);
+        return output;
+      },
+    },
+    extensions,
+  ) as any;
+}

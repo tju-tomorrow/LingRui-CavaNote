@@ -1,0 +1,407 @@
+import {
+  BlockNoteEditor,
+  BlockSchema,
+  InlineContentSchema,
+  StyleSchema,
+  mergeCSSClasses,
+} from "@blocknote/core";
+import React, {
+  HTMLAttributes,
+  ReactNode,
+  Ref,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { warnIfViewportMetaMisconfigured } from "../components/FormattingToolbar/viewportMeta.js";
+import { useBlockNoteEditor } from "../hooks/useBlockNoteEditor.js";
+import { useEditorChange } from "../hooks/useEditorChange.js";
+import { useEditorSelectionChange } from "../hooks/useEditorSelectionChange.js";
+import { usePrefersColorScheme } from "../hooks/usePrefersColorScheme.js";
+import {
+  BlockNoteContext,
+  BlockNoteContextValue,
+  useBlockNoteContext,
+} from "./BlockNoteContext.js";
+import {
+  BlockNoteDefaultUI,
+  BlockNoteDefaultUIProps,
+} from "./BlockNoteDefaultUI.js";
+import {
+  PortalElementOverride,
+  PortalElementReset,
+} from "./PortalElementOverride.js";
+import { resolvePortalElement } from "./portalElements.js";
+import {
+  BlockNoteViewContext,
+  useBlockNoteViewContext,
+} from "./BlockNoteViewContext.js";
+import { useComponentsContext } from "./ComponentsContext.js";
+import { Portals, getContentComponent } from "./EditorContent.js";
+import { ElementRenderer } from "./ElementRenderer.js";
+
+import "./styles.css";
+
+const emptyFn = () => {
+  // noop
+};
+
+export type BlockNoteViewProps<
+  BSchema extends BlockSchema,
+  ISchema extends InlineContentSchema,
+  SSchema extends StyleSchema,
+> = {
+  /**
+   * The {@link BlockNoteEditor} instance to render.
+   * @remarks `BlockNoteEditor`
+   */
+  editor: BlockNoteEditor<BSchema, ISchema, SSchema>;
+
+  /**
+   * Forces the editor to use the light or dark theme. See [Themes](https://www.blocknotejs.org/docs/react/styling-theming/themes) for additional customization when using Mantine.
+   */
+  theme?: "light" | "dark";
+
+  /**
+   * Locks the editor from being editable by the user if set to `false`.
+   *
+   * @default true
+   */
+  editable?: boolean;
+  /**
+   * A callback function that runs whenever the text cursor position or selection changes.
+   */
+  onSelectionChange?: () => void;
+
+  /**
+   * A callback function that runs whenever the editor's contents change.
+   * Same as {@link BlockNoteEditor.onChange}.
+   * @remarks `(editor: BlockNoteEditor) => void`
+   */
+  onChange?: Parameters<
+    BlockNoteEditor<BSchema, ISchema, SSchema>["onChange"]
+  >[0];
+
+  /**
+   * Whether to render the editor element itself.
+   * When `false`, you're responsible for rendering the editor yourself using the {@link BlockNoteViewEditor} component.
+   *
+   * @default true
+   */
+  renderEditor?: boolean;
+
+  /**
+   * Pass child elements to the {@link BlockNoteView} to create or customize toolbars, menus, or other UI components. See [UI Components](https://www.blocknotejs.org/docs/ui-components) for more.
+   */
+  children?: ReactNode;
+
+  /**
+   * Applies the UI library's theming — its color-scheme attribute, theme CSS
+   * variables — to a themed BlockNote root element. Wrappers pass this so that
+   * floating UI portalled outside the editor's DOM is themed too; they style
+   * the editor container itself through `className` and a `ref`.
+   */
+  applyThemedRoot?: (element: HTMLElement) => void;
+
+  ref?: Ref<HTMLDivElement> | undefined; // only here to get types working with the generics. Regular form doesn't work
+} & BlockNoteDefaultUIProps;
+
+// `portalElements` is part of `BlockNoteDefaultUIProps`, but we re-export the
+// types here for convenience so consumers can import them from `@blocknote/react`.
+export type { PortalElement, PortalElementsMap } from "./portalElements.js";
+
+function BlockNoteViewComponent<
+  BSchema extends BlockSchema,
+  ISchema extends InlineContentSchema,
+  SSchema extends StyleSchema,
+>(
+  props: BlockNoteViewProps<BSchema, ISchema, SSchema> &
+    Omit<
+      HTMLAttributes<HTMLDivElement>,
+      "onChange" | "onSelectionChange" | "children"
+    >,
+  ref: React.Ref<HTMLDivElement>,
+) {
+  const {
+    editor,
+    className,
+    theme,
+    children,
+    editable,
+    onSelectionChange,
+    onChange,
+    formattingToolbar,
+    linkToolbar,
+    slashMenu,
+    emojiPicker,
+    sideMenu,
+    filePanel,
+    tableHandles,
+    comments,
+    portalElements,
+    applyThemedRoot: applyLibraryTheme,
+    autoFocus,
+    renderEditor = true,
+    ...rest
+  } = props;
+
+  // `default` redirects every element without its own entry. When omitted,
+  // the ambient portal element (the editor container) stays in effect.
+  const defaultPortalElement = useMemo(
+    () => resolvePortalElement(portalElements?.default),
+    [portalElements?.default],
+  );
+
+  // Used so other components (suggestion menu) can set
+  // aria related props to the contenteditable div
+  const [contentEditableProps, setContentEditableProps] =
+    useState<Record<string, any>>();
+
+  const existingContext = useBlockNoteContext();
+  const systemColorScheme = usePrefersColorScheme();
+  const defaultColorScheme =
+    existingContext?.colorSchemePreference || systemColorScheme;
+
+  const editorColorScheme =
+    theme || (defaultColorScheme === "dark" ? "dark" : "light");
+
+  // Disable default UI components if no components context is found.
+  const componentsContext = useComponentsContext();
+  const defaultUIProps: BlockNoteDefaultUIProps = useMemo(
+    () => ({
+      formattingToolbar: componentsContext ? formattingToolbar : false,
+      linkToolbar: componentsContext ? linkToolbar : false,
+      sideMenu: componentsContext ? sideMenu : false,
+      slashMenu: componentsContext ? slashMenu : false,
+      filePanel: componentsContext ? filePanel : false,
+      tableHandles: componentsContext ? tableHandles : false,
+      emojiPicker: componentsContext ? emojiPicker : false,
+      comments: componentsContext ? comments : false,
+      portalElements,
+    }),
+    [
+      comments,
+      componentsContext,
+      emojiPicker,
+      filePanel,
+      formattingToolbar,
+      linkToolbar,
+      sideMenu,
+      slashMenu,
+      tableHandles,
+      portalElements,
+    ],
+  );
+
+  useEditorChange(onChange || emptyFn, editor);
+  useEditorSelectionChange(onSelectionChange || emptyFn, editor);
+
+  const setElementRenderer = useCallback(
+    (ref: (typeof editor)["elementRenderer"]) => {
+      editor.elementRenderer = ref;
+    },
+    [editor],
+  );
+
+  // Everything that makes an element a themed `.bn-root`: what the container
+  // below renders as props, applied imperatively for the portal roots
+  // `PortalElementOverride` creates outside React's tree.
+  const applyThemedRoot = useCallback(
+    (element: HTMLElement) => {
+      element.className = mergeCSSClasses(
+        "bn-root",
+        editorColorScheme,
+        className || "",
+      );
+      element.setAttribute("data-color-scheme", editorColorScheme);
+      applyLibraryTheme?.(element);
+    },
+    [editorColorScheme, className, applyLibraryTheme],
+  );
+
+  // The BlockNoteContext makes sure the editor and some helper methods
+  // are always available to nesteed compoenents
+  const blockNoteContext: BlockNoteContextValue<any, any, any> = useMemo(() => {
+    return {
+      ...existingContext,
+      editor,
+      setContentEditableProps,
+      colorSchemePreference: editorColorScheme,
+    };
+  }, [existingContext, editor, editorColorScheme]);
+
+  // We set defaultUIProps and editorProps on a different context, the BlockNoteViewContext.
+  // This BlockNoteViewContext is used to render the editor and the default UI.
+  const blockNoteViewContextValue = useMemo(() => {
+    return {
+      editorProps: {
+        autoFocus,
+        contentEditableProps,
+        editable,
+      },
+      defaultUIProps,
+      applyThemedRoot,
+    };
+  }, [
+    autoFocus,
+    contentEditableProps,
+    editable,
+    defaultUIProps,
+    applyThemedRoot,
+  ]);
+
+  return (
+    <BlockNoteContext.Provider value={blockNoteContext}>
+      <BlockNoteViewContext.Provider value={blockNoteViewContextValue}>
+        <ElementRenderer ref={setElementRenderer} />
+        <BlockNoteViewContainer
+          className={className}
+          renderEditor={renderEditor}
+          editorColorScheme={editorColorScheme}
+          defaultPortalElement={defaultPortalElement}
+          ref={ref}
+          {...rest}
+        >
+          {children}
+        </BlockNoteViewContainer>
+      </BlockNoteViewContext.Provider>
+    </BlockNoteContext.Provider>
+  );
+}
+
+/**
+ * Renders the div that wraps the editor and all default UI elements
+ * (.bn-container element).
+ */
+const BlockNoteViewContainer = React.forwardRef<
+  HTMLDivElement,
+  {
+    renderEditor: boolean;
+    editorColorScheme: "light" | "dark";
+    defaultPortalElement?: HTMLElement;
+    children: ReactNode;
+  } & Omit<
+    HTMLAttributes<HTMLDivElement>,
+    "onChange" | "onSelectionChange" | "children"
+  >
+>(
+  (
+    {
+      className,
+      renderEditor,
+      editorColorScheme,
+      defaultPortalElement,
+      children,
+      ...rest
+    },
+    ref,
+  ) => (
+    <div
+      className={mergeCSSClasses(
+        "bn-root",
+        "bn-container",
+        editorColorScheme,
+        className,
+      )}
+      data-color-scheme={editorColorScheme}
+      {...rest}
+      ref={ref}
+    >
+      <PortalElementReset>
+        <PortalElementOverride target={defaultPortalElement}>
+          {renderEditor ? (
+            <BlockNoteViewEditor>{children}</BlockNoteViewEditor>
+          ) : (
+            children
+          )}
+        </PortalElementOverride>
+      </PortalElementReset>
+    </div>
+  ),
+);
+
+// https://fettblog.eu/typescript-react-generic-forward-refs/
+export const BlockNoteViewRaw = React.forwardRef(BlockNoteViewComponent) as <
+  BSchema extends BlockSchema,
+  ISchema extends InlineContentSchema,
+  SSchema extends StyleSchema,
+>(
+  props: BlockNoteViewProps<BSchema, ISchema, SSchema> & {
+    ref?: React.ForwardedRef<HTMLDivElement>;
+  } & Omit<
+      HTMLAttributes<HTMLDivElement>,
+      "onChange" | "onSelectionChange" | "children"
+    >,
+) => ReturnType<typeof BlockNoteViewComponent<BSchema, ISchema, SSchema>>;
+
+/**
+ * Renders the contentEditable editor itself (.bn-editor element) and the
+ * default UI elements.
+ */
+export const BlockNoteViewEditor = (props: { children?: ReactNode }) => {
+  const ctx = useBlockNoteViewContext()!;
+  const editor = useBlockNoteEditor();
+
+  const portalManager = useMemo(() => {
+    return getContentComponent();
+  }, []);
+
+  // The page-level check for the mobile toolbar's viewport meta tag runs from
+  // here rather than from the toolbar's own hook, so it reaches developers on
+  // desktop and with a custom formatting toolbar alike.
+  useEffect(() => {
+    warnIfViewportMetaMisconfigured();
+  }, []);
+
+  const mount = useCallback(
+    (element: HTMLElement | null) => {
+      // Set editable state of the actual editor.
+      // We need to re-mount the editor when changing `isEditable` as TipTap
+      // removes the `tabIndex="0"` attribute we set (see
+      // `BlockNoteEditor.ts`). Ideally though, this logic would exist in a
+      // separate hook.
+      editor.isEditable = ctx.editorProps.editable !== false;
+      // Since we are not using TipTap's React Components, we need to set up the contentComponent it expects
+      // This is a simple replacement for the state management that Tiptap does internally
+      editor._tiptapEditor.contentComponent = portalManager;
+      if (element) {
+        editor.mount(element);
+      } else {
+        editor.unmount();
+      }
+    },
+    [ctx.editorProps.editable, editor, portalManager],
+  );
+
+  return (
+    <>
+      <Portals contentComponent={portalManager} />
+      <ContentEditableElement {...ctx.editorProps} {...props} mount={mount} />
+      {/* Renders the UI elements such as formatting toolbar, etc, unless they have been explicitly disabled  in defaultUIProps */}
+      <BlockNoteDefaultUI {...ctx.defaultUIProps} />
+      {/* Manually passed in children, such as customized UI elements / controllers */}
+      {props.children}
+    </>
+  );
+};
+
+/**
+ * Renders the contentEditable editor itself (.bn-editor element).
+ */
+const ContentEditableElement = (props: {
+  autoFocus?: boolean;
+  mount: (element: HTMLElement | null) => void;
+  contentEditableProps?: Record<string, any>;
+}) => {
+  const { autoFocus, mount, contentEditableProps } = props;
+  return (
+    <div
+      aria-autocomplete="list"
+      aria-haspopup="listbox"
+      data-bn-autofocus={autoFocus}
+      ref={mount}
+      {...contentEditableProps}
+    />
+  );
+};

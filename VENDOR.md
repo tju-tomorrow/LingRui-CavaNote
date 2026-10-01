@@ -14,10 +14,27 @@
 
 | 名称 | 用途 | 上游 repo | commit | 拷贝日期 | License | 已拷贝 | 已删除 |
 |---|---|---|---|---|---|---|---|
-| blocknote | 块编辑器 | https://github.com/TypeCellOS/BlockNote | _待钉_ | — | MPL-2.0 / XL=GPL-3.0 | — | — |
-| excalidraw | 手绘画布 | https://github.com/excalidraw/excalidraw | _待钉_ | — | MIT | — | — |
+| blocknote | 块编辑器 | https://github.com/TypeCellOS/BlockNote | `f64d5446e39d` | 2026-10-01 | MPL-2.0 / XL=GPL-3.0 | 整仓 | `docs` `tests` `examples` `playground` `scripts` `CHANGELOG` `CLA.md` `AGENTS.md` `CLAUDE.md` `pnpm-lock.yaml` `packages/mantine` `packages/ariakit` `packages/dev-scripts` |
+| excalidraw | 手绘画布 | https://github.com/excalidraw/excalidraw | `1919728724a1` | 2026-10-01 | MIT | `packages/{excalidraw,element,common,math,utils}` | 未拷贝 `excalidraw-app` `charts` `laser-pointer` `fractional-indexing` |
 | assistant-ui | AI 对话 UI | https://github.com/assistant-ui/assistant-ui | _待钉_ | — | MIT | — | — |
 | xyflow | 节点图 | https://github.com/xyflow/xyflow | _待钉_ | — | MIT | — | — |
+
+### 裁减记录（BlockNote）
+
+- 删 `docs`(37M) / `tests`(16M) / `examples`(4.8M) / `playground`。
+- 删 `packages/mantine` `packages/ariakit`：另一种 UI 适配层，我们用 `shadcn`。
+- 删 `packages/dev-scripts`：只用于生成文档/示例。
+- **保留** `shared/`（8 个 xl 包依赖它）与 `shared/assets/fonts`（PDF/Typst 导出运行时需要）。
+- 体积 107M → 47M。
+
+### 已知整合障碍（vendor 不进构建路径的原因）
+
+- BlockNote 所有包用 pnpm `catalog:` 引用 `vite-plus`，bun 无法解析。
+- BlockNote 已迁到 `@y/*`（Yjs 14 RC）命名空间，与本项目 yjs 13 需要对齐。
+- Excalidraw 的包之间用**已发布 npm 版本**互引（`0.18.0`），不是 workspace link，所以 vendor 的
+  `element`/`common`/`math`/`utils` 不被直接使用，需 alias 才能生效。
+
+详见 [ADR-0008](../../docs/adr/0008-vendor-not-in-build-path.md)。
 
 ## License 兼容器（相对 AGPL-3.0 项目）
 

@@ -1,0 +1,151 @@
+import { TextSelection } from "prosemirror-state";
+
+import {
+  createExtension,
+  createStore,
+} from "../../editor/BlockNoteExtension.js";
+
+export const FormattingToolbarExtension = createExtension(({ editor }) => {
+  const store = createStore(false);
+
+  const shouldShow = () => {
+    return editor.transact((tr) => {
+      // Don't show if the selection is empty, or is a text selection with no
+      // text.
+      if (tr.selection.empty) {
+        return false;
+      }
+
+      // Don't show if the selection is a text selection but contains no text.
+      if (
+        tr.selection instanceof TextSelection &&
+        tr.doc.textBetween(tr.selection.from, tr.selection.to).length === 0
+      ) {
+        return false;
+      }
+
+      // Searches the content of the selection to see if it spans a node with
+      // `"plain"` content (mapped to a `"text*"` node spec), i.e. plain,
+      // unformattable text such as a code block. Blocks without inline content
+      // but that aren't plain (e.g. images) should still show the toolbar.
+      let spansPlainContent = false;
+      tr.selection.content().content.descendants((node) => {
+        if (node.type.spec.content === "text*") {
+          spansPlainContent = true;
+        }
+        return !spansPlainContent; // keep descending until we find plain content
+      });
+
+      // Don't show if the selection spans plain content.
+      if (spansPlainContent) {
+        return false;
+      }
+
+      // Show toolbar otherwise.
+      return true;
+    });
+  };
+
+  return {
+    key: "formattingToolbar",
+    store,
+    mount({ dom, signal }) {
+      /**
+       * We want to mimic the Notion behavior of not showing the toolbar while the user is holding down the mouse button (to create a selection)
+       */
+      let preventShowWhileMouseDown = false;
+      let preventShowWhileDragging = false;
+
+      const unsubscribeOnChange = editor.onChange(() => {
+        if (preventShowWhileMouseDown || preventShowWhileDragging) {
+          return;
+        }
+        // re-evaluate whether the toolbar should be shown
+        store.setState(shouldShow());
+      });
+      const unsubscribeOnSelectionChange = editor.onSelectionChange(() => {
+        if (preventShowWhileMouseDown || preventShowWhileDragging) {
+          return;
+        }
+        // re-evaluate whether the toolbar should be shown
+        store.setState(shouldShow());
+      });
+      // The selection survives a blur, so without this the state would too:
+      // on a phone, tapping the page away from the editor closes the
+      // keyboard, and a controller mounting after that showed the toolbar over
+      // a blurred editor. Focus within the editor's own UI (a toolbar button,
+      // a popover's input) still counts as focused, and the event only fires
+      // once a focus handoff has settled. Known edge: with focus inside the
+      // toolbar (a menu open), scrolling the selection out of view hides the
+      // toolbar and the browser drops that focus, so the toolbar is gone until
+      // the next selection change.
+      const unsubscribeOnFocusChange = editor.onFocusChange(
+        (_editor, { focused }) => {
+          if (!focused) {
+            store.setState(false);
+            return;
+          }
+          if (preventShowWhileMouseDown || preventShowWhileDragging) {
+            return;
+          }
+          store.setState(shouldShow());
+        },
+        { includeEditorUI: true },
+      );
+
+      // To mimic Notion's behavior, we listen to the mouse down event to set the `preventShowWhileMouseDown` flag
+      dom.addEventListener(
+        "pointerdown",
+        () => {
+          preventShowWhileMouseDown = true;
+          store.setState(false);
+        },
+        { signal },
+      );
+      // To mimic Notion's behavior, we listen to the mouse up event to reset the `preventShowWhileMouseDown` flag and show the toolbar (if it should)
+      editor.prosemirrorView.root.addEventListener(
+        "pointerup",
+        () => {
+          preventShowWhileMouseDown = false;
+
+          // We only want to re-show the toolbar if the mouse made the selection
+          if (editor.isFocused()) {
+            store.setState(shouldShow());
+          }
+        },
+        { signal, capture: true },
+      );
+      // If the pointer gets cancelled, we don't want to be stuck in the `preventShowWhileMouseDown` state
+      dom.addEventListener(
+        "pointercancel",
+        () => {
+          preventShowWhileMouseDown = true;
+        },
+        { signal, capture: true },
+      );
+
+      editor.prosemirrorView.root.addEventListener(
+        "dragstart",
+        () => {
+          preventShowWhileDragging = true;
+          store.setState(false);
+        },
+        { signal },
+      );
+
+      editor.prosemirrorView.root.addEventListener(
+        "dragend",
+        () => {
+          preventShowWhileDragging = false;
+        },
+        { signal },
+      );
+
+      signal.addEventListener("abort", () => {
+        unsubscribeOnChange();
+        unsubscribeOnSelectionChange();
+        unsubscribeOnFocusChange();
+      });
+    },
+  } as const;
+});

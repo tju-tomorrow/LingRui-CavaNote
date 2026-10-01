@@ -17,4 +17,6 @@ out/
 # vendor 中间产物
 packages/vendor/**/node_modules/
 packages/vendor/**/dist/
-!packages/vendor/**/VENDOR.md
+
+# 注意：packages/vendor/** 是上游源码，会被 bun test 扫到。
+# 测试入口已在根 package.json 的 test 脚本里显式限定路径。

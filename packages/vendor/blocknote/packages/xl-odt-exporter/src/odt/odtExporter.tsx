@@ -1,0 +1,463 @@
+import {
+  Block,
+  BlockNoteSchema,
+  BlockSchema,
+  COLORS_DEFAULT,
+  Exporter,
+  ExporterOptions,
+  InlineContentSchema,
+  StyleSchema,
+  StyledText,
+} from "@blocknote/core";
+import { corsProxyResolveFileUrl } from "@shared/api/corsProxy.js";
+import { loadFileBuffer } from "@shared/util/fileUtil.js";
+import { getImageDimensions } from "@shared/util/imageUtil.js";
+import { BlobReader, BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
+import { renderToString } from "react-dom/server";
+import stylesXml from "./template/styles.xml?raw";
+
+export class ODTExporter<
+  B extends BlockSchema,
+  S extends StyleSchema,
+  I extends InlineContentSchema,
+> extends Exporter<
+  B,
+  I,
+  S,
+  React.ReactNode,
+  React.ReactNode,
+  Record<string, string>,
+  React.ReactNode
+> {
+  // "Styles" to be added to the AutomaticStyles section of the ODT file
+  // Keyed by the style name
+  private automaticStyles: Map<string, React.ReactNode> = new Map();
+
+  // "Pictures" to be added to the Pictures folder in the ODT file
+  // Keyed by the original image URL
+  private pictures = new Map<
+    string,
+    {
+      file: Blob;
+      fileName: string;
+      height: number;
+      width: number;
+    }
+  >();
+
+  // Embedded object sub-documents (e.g. formulas), added as
+  // "Object N/content.xml" entries in the ODT file.
+  private objects: Array<{
+    path: string;
+    contentXml: string;
+    mediaType: string;
+  }> = [];
+
+  private styleCounter = 0;
+  private readonly registeredStyleNames = new Map<string, string>();
+
+  public readonly options: ExporterOptions;
+
+  constructor(
+    protected readonly schema: BlockNoteSchema<B, I, S>,
+    mappings: Exporter<
+      NoInfer<B>,
+      NoInfer<I>,
+      NoInfer<S>,
+      React.ReactNode,
+      React.ReactNode,
+      Record<string, string>,
+      React.ReactNode
+    >["mappings"],
+    options?: Partial<ExporterOptions>,
+  ) {
+    const defaults = {
+      colors: COLORS_DEFAULT,
+      // Proxy cross-origin image fetches so any host works in the browser, not
+      // only CORS-enabled ones (mirrors the pdf/docx exporters).
+      resolveFileUrl: corsProxyResolveFileUrl,
+    } satisfies Partial<ExporterOptions>;
+
+    super(schema, mappings, { ...defaults, ...options });
+    this.options = { ...defaults, ...options };
+  }
+
+  protected async loadFonts() {
+    const interFont = await loadFileBuffer(
+      await import("@shared/assets/fonts/inter/Inter_18pt-Regular.ttf"),
+    );
+    const geistMonoFont = await loadFileBuffer(
+      await import("@shared/assets/fonts/GeistMono-Regular.ttf"),
+    );
+
+    return [
+      {
+        name: "Inter 18pt",
+        fileName: "Inter_18pt-Regular.ttf",
+        data: new Blob([interFont as ArrayBuffer], { type: "font/ttf" }),
+      },
+      {
+        name: "Geist Mono",
+        fileName: "GeistMono-Regular.ttf",
+        data: new Blob([geistMonoFont as ArrayBuffer], { type: "font/ttf" }),
+      },
+    ];
+  }
+
+  public transformStyledText(styledText: StyledText<S>): React.ReactNode {
+    const stylesArray = this.mapStyles(styledText.styles);
+    const styles = Object.assign({}, ...stylesArray);
+
+    // A hard line break (shift+enter) arrives as "\n" inside the text. ODF
+    // collapses raw whitespace, so explicit <text:line-break/> elements are
+    // emitted between the lines instead (same as the code block mapping).
+    const text = styledText.text
+      .split("\n")
+      .flatMap((line, index) =>
+        index === 0 ? [line] : [<text:line-break key={index} />, line],
+      );
+
+    if (Object.keys(styles).length === 0) {
+      return text;
+    }
+
+    // Like `registerStyle`, identical style combinations are deduplicated -
+    // every styled run (each bold word, say) would otherwise create its own
+    // automatic style. The key is prefixed so the two key spaces can't
+    // collide.
+    const key = "T:" + JSON.stringify(styles);
+    let styleName = this.registeredStyleNames.get(key);
+    if (styleName === undefined) {
+      styleName = `BN_T${++this.styleCounter}`;
+      this.automaticStyles.set(
+        styleName,
+        <style:style style:name={styleName} style:family="text">
+          <style:text-properties {...styles} />
+        </style:style>,
+      );
+      this.registeredStyleNames.set(key, styleName);
+    }
+
+    return <text:span text:style-name={styleName}>{text}</text:span>;
+  }
+
+  public async transformBlocks(
+    blocks: Block<B, I, S>[],
+    nestingLevel = 0,
+  ): Promise<Awaited<React.ReactNode>[]> {
+    const ret: Awaited<React.ReactNode>[] = [];
+    let numberedListIndex = 0;
+
+    for (const block of blocks) {
+      if (block.type === "numberedListItem") {
+        numberedListIndex++;
+      } else {
+        numberedListIndex = 0;
+      }
+
+      if (["columnList", "column"].includes(block.type)) {
+        const children = await this.transformBlocks(block.children, 0);
+        const content = await this.mapBlock(
+          block as any,
+          0,
+          numberedListIndex,
+          children,
+        );
+
+        ret.push(content);
+      } else {
+        const children = await this.transformBlocks(
+          block.children,
+          nestingLevel + 1,
+        );
+        const content = await this.mapBlock(
+          block as any,
+          nestingLevel,
+          numberedListIndex,
+          children,
+        );
+
+        ret.push(content);
+        if (children.length > 0) {
+          ret.push(...children);
+        }
+      }
+    }
+
+    return ret;
+  }
+
+  public async toODTDocument(
+    blocks: Block<B, I, S>[],
+    options?: {
+      header?: string | XMLDocument;
+      footer?: string | XMLDocument;
+    },
+  ): Promise<Blob> {
+    const xmlOptionToString = (xmlDocument: string | XMLDocument) => {
+      const xmlNamespacesRegEx =
+        /<([a-zA-Z0-9:]+)\s+?(?:xml)ns(?::[a-zA-Z0-9]+)?=".*"(.*)>/g;
+      let stringifiedDoc = "";
+
+      if (typeof xmlDocument === "string") {
+        stringifiedDoc = xmlDocument;
+      } else {
+        const serializer = new XMLSerializer();
+
+        stringifiedDoc = serializer.serializeToString(xmlDocument);
+      }
+
+      // Detect and remove XML namespaces (already defined in the root element)
+      return stringifiedDoc.replace(xmlNamespacesRegEx, "<$1$2>");
+    };
+    const blockContent = await this.transformBlocks(blocks);
+    const styles = Array.from(this.automaticStyles.values());
+    const pictures = Array.from(this.pictures.values());
+    const fonts = await this.loadFonts();
+    const header = xmlOptionToString(options?.header || "");
+    const footer = xmlOptionToString(options?.footer || "");
+
+    const content = (
+      <office:document-content
+        xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+        xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+        xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+        xmlns:xlink="http://www.w3.org/1999/xlink"
+        xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+        xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+        xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"
+        xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0"
+        office:version="1.3"
+      >
+        <office:font-face-decls>
+          {fonts.map((font) => {
+            return (
+              <style:font-face
+                key={font.name}
+                style:name={font.name}
+                svg:font-family={font.name}
+                style:font-pitch="variable"
+              >
+                <svg:font-face-src>
+                  <svg:font-face-uri
+                    xlink:href={`Fonts/${font.fileName}`}
+                    xlink:type="simple"
+                    loext:font-style="normal"
+                    loext:font-weight="normal"
+                  >
+                    <svg:font-face-format svg:string="truetype" />
+                  </svg:font-face-uri>
+                </svg:font-face-src>
+              </style:font-face>
+            );
+          })}
+        </office:font-face-decls>
+        <office:automatic-styles>{styles}</office:automatic-styles>
+        {(header || footer) && (
+          <office:master-styles>
+            <style:master-page
+              style:name="Standard"
+              style:page-layout-name="Mpm1"
+              draw:style-name="Mdp1"
+            >
+              {header && (
+                <style:header
+                  dangerouslySetInnerHTML={{
+                    __html: header,
+                  }}
+                ></style:header>
+              )}
+              {footer && (
+                <style:footer
+                  dangerouslySetInnerHTML={{
+                    __html: footer,
+                  }}
+                ></style:footer>
+              )}
+            </style:master-page>
+          </office:master-styles>
+        )}
+        <office:body>
+          <office:text>{blockContent}</office:text>
+        </office:body>
+      </office:document-content>
+    );
+
+    const manifestNode = (
+      <manifest:manifest
+        xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
+        manifest:version="1.3"
+      >
+        <manifest:file-entry
+          manifest:media-type="application/vnd.oasis.opendocument.text"
+          manifest:full-path="/"
+        />
+        <manifest:file-entry
+          manifest:media-type="text/xml"
+          manifest:full-path="content.xml"
+        />
+        <manifest:file-entry
+          manifest:media-type="text/xml"
+          manifest:full-path="styles.xml"
+        />
+        {pictures.map((picture) => {
+          return (
+            <manifest:file-entry
+              key={picture.fileName}
+              manifest:media-type={picture.file.type}
+              manifest:full-path={`Pictures/${picture.fileName}`}
+            />
+          );
+        })}
+        {fonts.map((font) => {
+          return (
+            <manifest:file-entry
+              key={font.name}
+              manifest:media-type="application/x-font-ttf"
+              manifest:full-path={`Fonts/${font.fileName}`}
+            />
+          );
+        })}
+        {this.objects.flatMap((object) => [
+          <manifest:file-entry
+            key={object.path}
+            manifest:media-type={object.mediaType}
+            manifest:full-path={object.path}
+          />,
+          <manifest:file-entry
+            key={`${object.path}content.xml`}
+            manifest:media-type="text/xml"
+            manifest:full-path={`${object.path}content.xml`}
+          />,
+        ])}
+      </manifest:manifest>
+    );
+    const zipWriter = new ZipWriter(
+      new BlobWriter("application/vnd.oasis.opendocument.text"),
+    );
+
+    // Add mimetype first, uncompressed
+    void zipWriter.add(
+      "mimetype",
+      new TextReader("application/vnd.oasis.opendocument.text"),
+      {
+        compressionMethod: 0,
+        level: 0,
+        dataDescriptor: false,
+        extendedTimestamp: false,
+      },
+    );
+
+    const contentXml = renderToString(content);
+    const manifestXml = renderToString(manifestNode);
+
+    void zipWriter.add("content.xml", new TextReader(contentXml));
+    void zipWriter.add("styles.xml", new TextReader(stylesXml));
+    void zipWriter.add("META-INF/manifest.xml", new TextReader(manifestXml));
+    fonts.forEach((font) => {
+      void zipWriter.add(`Fonts/${font.fileName}`, new BlobReader(font.data));
+    });
+    pictures.forEach((picture) => {
+      void zipWriter.add(
+        `Pictures/${picture.fileName}`,
+        new BlobReader(picture.file),
+      );
+    });
+    this.objects.forEach((object) => {
+      void zipWriter.add(
+        `${object.path}content.xml`,
+        new TextReader(object.contentXml),
+      );
+    });
+
+    return zipWriter.close();
+  }
+
+  public registerStyle(style: (name: string) => React.ReactNode): string {
+    // Identical definitions are deduplicated: mappings register their styles
+    // per block, and a document with many alike blocks would otherwise fill
+    // the automatic styles with copies. The definition is keyed by its
+    // rendered shape, with a placeholder where the generated name appears.
+    const key = "S:" + JSON.stringify(style("BN_STYLE_NAME_PLACEHOLDER"));
+    const existing = this.registeredStyleNames.get(key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const styleName = `BN_S${++this.styleCounter}`;
+    this.automaticStyles.set(styleName, style(styleName));
+    this.registeredStyleNames.set(key, styleName);
+    return styleName;
+  }
+
+  /**
+   * Registers an embedded object sub-document (e.g. a formula) and returns
+   * its path, for referencing from a `draw:object`'s `xlink:href`:
+   *
+   * ```tsx
+   * <draw:frame draw:style-name="..." text:anchor-type="as-char">
+   *   <draw:object
+   *     xlink:href={path}
+   *     xlink:type="simple"
+   *     xlink:show="embed"
+   *     xlink:actuate="onLoad"
+   *   />
+   * </draw:frame>
+   * ```
+   */
+  public registerObject(
+    contentXml: string,
+    mediaType = "application/vnd.oasis.opendocument.formula",
+  ): string {
+    const path = `Object ${this.objects.length + 1}/`;
+    this.objects.push({ path, contentXml, mediaType });
+    return path;
+  }
+
+  public async registerPicture(url: string): Promise<{
+    path: string;
+    mimeType: string;
+    height: number;
+    width: number;
+  }> {
+    const mimeTypeFileExtensionMap = {
+      "image/apng": "apng",
+      "image/avif": "avif",
+      "image/bmp": "bmp",
+      "image/gif": "gif",
+      "image/vnd.microsoft.icon": "ico",
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/svg+xml": "svg",
+      "image/tiff": "tiff",
+      "image/webp": "webp",
+    };
+    if (this.pictures.has(url)) {
+      const picture = this.pictures.get(url)!;
+
+      return {
+        path: `Pictures/${picture.fileName}`,
+        mimeType: picture.file.type,
+        height: picture.height,
+        width: picture.width,
+      };
+    }
+
+    const blob = await this.resolveFile(url);
+    const fileExtension =
+      mimeTypeFileExtensionMap[
+        blob.type as keyof typeof mimeTypeFileExtensionMap
+      ] || "png";
+    const fileName = `picture-${this.pictures.size}.${fileExtension}`;
+    const { width, height } = await getImageDimensions(blob);
+
+    this.pictures.set(url, {
+      file: blob,
+      fileName: fileName,
+      height,
+      width,
+    });
+
+    return { path: `Pictures/${fileName}`, mimeType: blob.type, height, width };
+  }
+}

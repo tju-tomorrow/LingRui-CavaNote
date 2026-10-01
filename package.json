@@ -7,16 +7,19 @@
   "type": "module",
   "workspaces": [
     "apps/*",
-    "packages/*",
-    "packages/vendor/*",
-    "packages/vendor/*/packages/*"
+    "packages/ai",
+    "packages/anim",
+    "packages/canvas",
+    "packages/knowledge",
+    "packages/mascot",
+    "packages/ui"
   ],
   "scripts": {
     "dev": "bun run --filter @lingrui/web dev",
     "dev:collab": "bun run --filter @lingrui/collab dev",
     "build": "bun run --filter '*' build",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test packages/ai packages/anim packages/canvas packages/knowledge packages/mascot packages/ui apps",
     "vendor": "bash scripts/vendor.sh"
   },
   "devDependencies": {
