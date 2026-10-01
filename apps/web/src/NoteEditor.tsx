@@ -4,13 +4,25 @@
  * 关键约定（docs/architecture.md §1）：文档块与画布元素共享同一个 Y.Doc，
  * 块只持有 nodeId，正文存在 Y.Doc 里。
  *
- * ⚠️ 坑（踩过）：BlockNote 0.55 **只传 `collaboration` 是静默无效的**，
- * 必须用 `withCollaboration()` 包装 options 才会注册协作扩展。
- * 症状极具迷惑性：编辑器照常工作（内容来自 initialContent），
- * 但 `ydoc.getXmlFragment("document-store").length === 0` ——
- * 也就是文档**根本没进 Y.Doc、刷新就没了**。
- * 另外 `withCollaboration` 会把 `initialContent` 覆盖成一个占位段落
- * （避免各端随机 id 冲突），所以种子内容要自己补。
+ * ⚠️ 坑（踩过，都记进 ADR-0009）：
+ *
+ * 1. BlockNote 0.55 **只传 `collaboration` 是静默无效的**，必须用
+ *    `withCollaboration()` 包装 options 才会注册协作扩展。症状极具迷惑性：
+ *    编辑器照常工作（内容来自 initialContent），但
+ *    `ydoc.getXmlFragment("document-store").length === 0`——文档**根本没进
+ *    Y.Doc、刷新就没了**。
+ *
+ * 2. `withCollaboration` 会把 `initialContent` 覆盖成一个占位段落（避免各端
+ *    随机 id 冲突），而且**就算覆盖回我们自己的 initialContent 也不会被写进
+ *    fragment**。原因（读了 y-prosemirror sync-plugin 源码）：挂载时
+ *    `_forceRerender()` 先把 PM doc 替换成（空的）fragment 内容，然后
+ *    `update` 钩子里 `findDiffStart(空文档, PM doc) === null` → 永远不写回。
+ *    之前某次"成功"是 IndexedDB 异步恢复窗口撞上的运气，擦库就露馅。
+ *
+ *    确定性做法：挂载后检查 fragment 仍为空，就用 `replaceBlocks` 补种——
+ *    此刻 PM doc 从空变成有内容，ySync 的 diff 检查才会触发写回。
+ *    此路径在空 fragment 上不会踩 restoreRelativeSelection 越界
+ *    （那个错误只在"异步恢复旧内容"的竞态里出现）。
  */
 import { useEffect } from "react";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -46,29 +58,57 @@ const INITIAL_CONTENT = [
 
 export function NoteEditor() {
   const editor = useCreateBlockNote(
-    {
-      ...withCollaboration({
-        schema,
-        collaboration: {
-          fragment: blockFragment(),
-          user: { name: "你", color: "#5b5bd6" },
-          ...(awareness ? { provider: { awareness } } : {}),
-        },
-      }),
-      // withCollaboration 会把 initialContent 换成占位段落（避免各端随机 id 冲突），
-      // 这里覆盖回来。YSync 只在 fragment 为空时应用它，所以不会覆盖已有内容。
-      //
-      // 为什么不"挂载后 replaceBlocks 补种"：那会和 Yjs 的同步事务抢时序，
-      // 触发 y-prosemirror 的 restoreRelativeSelection 越界（Position out of range）。
-      initialContent: INITIAL_CONTENT,
-    },
+    withCollaboration({
+      schema,
+      collaboration: {
+        fragment: blockFragment(),
+        user: { name: "你", color: "#5b5bd6" },
+        ...(awareness ? { provider: { awareness } } : {}),
+      },
+    }),
     [],
   );
+
+  // 首次打开 / 清库后：fragment 还是空的 → 把种子内容写进去（见文件头注释第 2 条）。
+  //
+  // 为什么轮询而不是 rAF：编辑器的 Tiptap 视图在 BlockNoteView 内部才挂载，
+  // 挂载时的 ySync `_forceRerender` 会把 PM doc 换成（空的）fragment、冲掉过早种的内容。
+  // 必须等视图真的挂好了、fragment 依然为空，replaceBlocks 才会触发 diff 写回。
+  useEffect(() => {
+    const seed = (): boolean => {
+      if (blockFragment()._length > 0) return true; // 已有内容（不管是旧的还是别人种的），停
+      const doc = editor.document;
+      const first = doc[0];
+      // 空数组是 truthy 的，所以要显式判断：段落内容必须是不存在 / 空数组才叫空
+      const contentIsEmpty =
+        first?.content == null ||
+        (Array.isArray(first.content) && first.content.length === 0);
+      const firstIsEmptyPlaceholder =
+        doc.length === 1 && first?.type === "paragraph" && contentIsEmpty;
+      if (!firstIsEmptyPlaceholder) return true; // 文档非空但 fragment 空：等 ySync 同步即可
+      editor.replaceBlocks(doc, INITIAL_CONTENT);
+      return blockFragment()._length > 0;
+    };
+
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      if (seed() || tries > 30) window.clearInterval(timer);
+    }, 120);
+    return () => window.clearInterval(timer);
+  }, [editor]);
 
   // 把编辑器交给 bridge，聊天/画布才能操作文档
   useEffect(() => {
     registerEditor(editor);
-    return () => registerEditor(null);
+    // 调试：控制台可直接操作编辑器（与 window.__lingrui.ydoc 同级，便于排查文档绑定问题）
+    ((window as unknown as { __lingrui?: Record<string, unknown> })["__lingrui"] ??= {})
+      .editor = editor;
+    return () => {
+      registerEditor(null);
+      delete (window as unknown as { __lingrui?: Record<string, unknown> })["__lingrui"]
+        ?.editor;
+    };
   }, [editor]);
 
   return (

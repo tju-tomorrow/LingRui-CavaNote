@@ -24,6 +24,17 @@ export const SEED_NODES: KnowledgeNode[] = [
       { id: "r-gw-reg", to: "registry", kind: "depends-on", label: "服务发现" },
     ],
     meta: { tech: ["Nginx", "Kong", "Spring Cloud Gateway"] },
+    roles: [
+      "统一入口：所有请求先经过网关",
+      "鉴权与限流：保障系统安全与稳定",
+      "路由转发：根据规则转发到后端服务",
+      "监控统计：收集请求日志与性能数据",
+    ],
+    faq: [
+      { id: "faq-gw-1", q: "如何设计一个高可用的 API 网关？" },
+      { id: "faq-gw-2", q: "Nginx 与 Kong 的区别是什么？" },
+      { id: "faq-gw-3", q: "网关如何实现灰度发布？" },
+    ],
   },
   {
     id: "service",
@@ -37,7 +48,23 @@ export const SEED_NODES: KnowledgeNode[] = [
       { id: "r-svc-mon", to: "monitor", kind: "depends-on", label: "上报指标" },
     ],
   },
-  { id: "redis", kind: "cache", title: "Redis 缓存", summary: "可选，挡在读库之前", relations: [] },
+  {
+    id: "redis",
+    kind: "cache",
+    title: "Redis 缓存",
+    summary: "可选，挡在读库之前",
+    roles: [
+      "缓存热点数据，降低数据库读压力",
+      "支持多种数据结构（String / Hash / List / ZSet）",
+      "可选步骤：缓存绝不能是数据的唯一来源",
+    ],
+    meta: { tech: ["Redis", "Valkey"] },
+    faq: [
+      { id: "faq-redis-1", q: "缓存穿透 / 击穿 / 雪崩分别怎么解决？" },
+      { id: "faq-redis-2", q: "为什么用 Redis 而不是本地缓存？" },
+    ],
+    relations: [],
+  },
   { id: "mq", kind: "queue", title: "消息队列 (MQ)", summary: "异步解耦", relations: [] },
   {
     id: "db",

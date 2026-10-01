@@ -542,6 +542,195 @@ html[data-glass="desktop"] .bn-container {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
+/* 节点详情卡（P1.6 ⭐）：右上角浮层，跟随全局 focus */
+.node-detail {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 300px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  z-index: 6;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14);
+  padding: 12px 14px;
+  opacity: 0;
+  transform: translateX(8px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.node-detail.is-in {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.nd-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.nd-kind {
+  flex: none;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-weight: 600;
+}
+
+.nd-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nd-origin {
+  flex: none;
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.nd-close {
+  margin-left: auto;
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.nd-close:hover {
+  background: #f3f4f6;
+  color: var(--text);
+}
+
+.nd-summary {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+
+.nd-section {
+  margin-top: 10px;
+}
+
+.nd-section h4 {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.nd-roles,
+.nd-faq,
+.nd-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nd-roles li {
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding-left: 14px;
+  position: relative;
+  margin-bottom: 4px;
+}
+
+.nd-roles li::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: var(--accent, #5b5bd6);
+  font-size: 10px;
+}
+
+.nd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nd-chip {
+  font-size: 11.5px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: #f3f4f6;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.nd-faq li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.nd-faq-q {
+  flex: 1;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.nd-faq-ask {
+  flex: none;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--accent, #5b5bd6);
+  border-radius: 5px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nd-faq-ask:hover {
+  background: #f0f0ff;
+}
+
+.nd-links li {
+  font-size: 12.5px;
+  padding: 2px 0;
+}
+
+.nd-links a {
+  color: var(--accent, #5b5bd6);
+  text-decoration: none;
+}
+
+.nd-links a:hover {
+  text-decoration: underline;
+}
+
+.nd-empty {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 10px 0 0;
+}
+
 /* 孤儿卡片：节点已删，但卡片还留在文档里 */
 .knowledge-card-orphan {
   border-left-color: #b0b0b0;

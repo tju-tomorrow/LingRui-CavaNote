@@ -4,8 +4,9 @@
  * 每个分镜 = 一章；缩略图由 `sampleAt(script, shot.startT)` 现场画成 mini SVG
  * （节点矩形 + 连线，坐标归一化）。点击 = seek 到该章起点。
  */
-import { sampleAt, shotAt, type SceneScript } from "@lingrui/anim";
+import { sampleAt, shotAt, type SceneScript, type Shot } from "@lingrui/anim";
 import { formatTime, player, usePlayer } from "../state/player";
+import { useKnowledgeChapters } from "../collab/useKnowledge";
 
 const W = 88;
 const H = 48;
@@ -57,7 +58,15 @@ function MiniShot({ script, t }: { script: SceneScript; t: number }) {
 }
 
 export function ShotStrip() {
-  const { script, chapters, t } = usePlayer();
+  const { script, chapters: memory, t } = usePlayer();
+  // 优先 Y.Doc 里的分镜（可被人工编辑、可持久化）；还没落过盘时退回内存推导。
+  // Chapter.startT 是可选的，这里归一成 Shot（startT 必填）给 shotAt / seek 用。
+  const persisted = useKnowledgeChapters();
+  const chapters: Shot[] = (persisted.length > 0 ? persisted : memory).map((c) => ({
+    id: c.id,
+    title: c.title,
+    startT: c.startT ?? 0,
+  }));
   if (!script || chapters.length === 0) return null;
   const current = shotAt(chapters, t);
 

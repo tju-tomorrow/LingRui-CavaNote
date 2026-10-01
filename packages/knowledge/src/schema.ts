@@ -198,28 +198,14 @@ export function removeNode(doc: Y.Doc, id: NodeId): void {
 }
 
 /**
- * 绑定：把文档块 / 画布元素挂到某个节点上。
- * 这就是"一个节点，多个视图"的实现入口。
+ * 绑定：把画布元素挂到某个节点上。
+ * （原 `bindBlock` 已移除 —— 文档块双绑改由 `apps/web` 直接写 `blockIds`，见 agent.ts。）
  */
-export function bindBlock(doc: Y.Doc, id: NodeId, blockId: string): void {
-  const node = readNode(doc, id);
-  if (!node) throw new Error(`unknown node: ${id}`);
-  upsertNode(doc, { ...node, blockId });
-}
-
-export function bindCanvas(doc: Y.Doc, id: NodeId, canvas: CanvasBinding): void {
-  const node = readNode(doc, id);
-  if (!node) throw new Error(`unknown node: ${id}`);
-  upsertNode(doc, { ...node, canvas });
-}
-
-/** 反查：画布元素 id → 节点 id */
-export function nodeIdByCanvasElement(doc: Y.Doc, elementId: string): NodeId | undefined {
-  for (const [id, node] of getNodes(doc)) {
-    if (node.canvas?.elementId === elementId) return id;
-  }
-  return undefined;
-}
+/**
+ * 说明：`bindCanvas` / `nodeIdByCanvasElement` 已移除（无人调用）。
+ * 画布元素 id 由 `@lingrui/canvas` 的 `el-<nodeId>` 约定直接推导（`excalidraw-binding.ts`），
+ * `KnowledgeNode.canvas` 字段仍保留作兼容读取。
+ */
 
 // ---------------------------------------------------------------------------
 // provenance（ADR-0011）

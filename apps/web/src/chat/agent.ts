@@ -17,7 +17,14 @@ import {
   type PetToolCall,
   type ToolResult,
 } from "@lingrui/ai";
-import { getNodes, listPets, readNode, upsertNode } from "@lingrui/knowledge";
+import {
+  getNodes,
+  listChapters,
+  listPets,
+  readNode,
+  replaceChapters,
+  upsertNode,
+} from "@lingrui/knowledge";
 import { deriveShots, type Action } from "@lingrui/anim";
 import { ydoc } from "../collab/doc";
 import { layoutSnapshot } from "../collab/layout";
@@ -47,10 +54,42 @@ function applyToolResult(result: ToolResult): string {
   return result.ok ? `\n\n⚙ ${result.message}` : `\n\n（${result.message}）`;
 }
 
-/** 从当前动作流推导分镜（缩略图用） */
+/** 上一次写进 Y.Doc 的分镜指纹（内存态，刷新即清） */
+let lastSeededShotsFp = "";
+
+/**
+ * 从当前动作流推导分镜（缩略图用），并同步进 Y.Doc（PRD/演出层.md §4）。
+ *
+ * 同步规则（「先推导、后人工改」）：
+ *   - Y.Doc 里的分镜**和上一版推导一致** → 用新的推导覆盖（AI 每轮都在讲新节点，
+ *     分镜应该跟着长）；
+ *   - 一旦**人工**改过（重命名/合并/排序，指纹就不再等于推导）→ 推导停手，
+ *     以人工那版为准。
+ */
 function shotsOf() {
   const nodes = getNodes(ydoc);
-  return deriveShots(timeline, (id) => nodes.get(id)?.title);
+  const derived = deriveShots(timeline, (id) => nodes.get(id)?.title);
+
+  if (derived.length > 0) {
+    const persistedFp = listChapters(ydoc)
+      .map((c) => c.id)
+      .join(",");
+    if (persistedFp === lastSeededShotsFp && lastSeededShotsFp !== "") {
+      // 推导与落盘一致且已落过盘 → 跟随推导继续长
+      replaceChapters(
+        ydoc,
+        derived.map((s, i) => ({ id: s.id, title: s.title, order: i, startT: s.startT })),
+      );
+    } else if (listChapters(ydoc).length === 0 && lastSeededShotsFp === "") {
+      // 第一次落盘：分镜还完全没有，种一份（这是"未人工改过"的初始态）
+      replaceChapters(
+        ydoc,
+        derived.map((s, i) => ({ id: s.id, title: s.title, order: i, startT: s.startT })),
+      );
+    }
+  }
+  lastSeededShotsFp = derived.map((s) => s.id).join(",");
+  return derived;
 }
 
 /** 执行一次宠物工具调用 */
@@ -141,6 +180,8 @@ export function runAgent(message: string): AgentTurn {
     occupied,
     lastSpawnedId,
     nodeSize: NODE_SIZE,
+    // 供"移到 X 旁边"计算空位用
+    positions: layout,
   });
   const toolResults: ToolResult[] = [];
   const startT = cursor;

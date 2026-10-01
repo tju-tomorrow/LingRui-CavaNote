@@ -9,7 +9,7 @@
  *   1. 优先 /api/chat（apps/collab 代理任何 OpenAI 兼容后端）
  *   2. 不可用时静默降级到本地 planner —— 两条路径共用同一套画布工具
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AssistantRuntimeProvider,
   useAui,
@@ -26,6 +26,7 @@ import { useFocus } from "../state/focus";
 import { snapshotToPrompt, applyPending } from "@lingrui/ai";
 import { ydoc } from "../collab/doc";
 import { useUndoState, undoRound } from "../state/history";
+import { registerAsk } from "./ask";
 import {
   resolvePending,
   clearPending,
@@ -152,6 +153,21 @@ function PendingPatches() {
   );
 }
 
+/**
+ * 在 RuntimeProvider 里挂一个外部追问入口：
+ * 节点详情卡的 FAQ 点击「问一下」时，通过 registerAsk/askLingRui 把问题塞进聊天框。
+ */
+function AskBridge() {
+  const aui = useAui();
+  useEffect(() => {
+    registerAsk((text) => {
+      aui.thread.append(text);
+    });
+    return () => registerAsk(null);
+  }, [aui]);
+  return null;
+}
+
 function Messages() {
   const messages = useAuiState((s) => s.thread.messages);
   const focus = useFocus();
@@ -240,6 +256,7 @@ export function ChatPanel() {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      <AskBridge />
       <Messages />
       <PendingPatches />
       <Composer />

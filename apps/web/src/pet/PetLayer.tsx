@@ -114,7 +114,7 @@ export function PetLayer(): JSX.Element | null {
         position: "fixed",
         right: 20,
         bottom: 176,
-        zIndex: 20,
+        zIndex: 4,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",

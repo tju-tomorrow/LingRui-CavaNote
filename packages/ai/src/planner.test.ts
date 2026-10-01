@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { KnowledgeNode } from "@lingrui/knowledge";
-import { freeSlot, inferKind, plan } from "./planner";
+import { freeSlot, inferKind, plan, slotBeside } from "./planner";
 
 function node(id: string, kind: KnowledgeNode["kind"], title: string): KnowledgeNode {
   return { id, kind, title, relations: [] };
@@ -134,6 +134,125 @@ describe("plan", () => {
     const p = plan("你好呀", { t: 0, nodes: NODES, occupied: [] });
     expect(p.calls).toEqual([]);
     expect(p.reply).toBe("");
+  });
+});
+
+describe("改名 / 改摘要（updateNode）", () => {
+  test("「把 X 改名为 Y」→ updateNode title", () => {
+    const p = plan("把网关改名为入口", { t: 0, nodes: NODES, occupied: [] });
+    expect(p.calls).toHaveLength(1);
+    expect(p.calls[0]).toMatchObject({
+      name: "updateNode",
+      input: { id: "gateway", title: "入口" },
+    });
+    expect(p.reply).toContain("入口");
+  });
+
+  test("新名是类型词时顺带改 kind", () => {
+    const p = plan("把网关改成 MySQL", { t: 0, nodes: NODES, occupied: [] });
+    const call = p.calls[0];
+    expect(call?.name).toBe("updateNode");
+    if (call?.name === "updateNode") {
+      expect(call.input.title).toBe("MySQL");
+      expect(call.input.kind).toBe("database");
+    }
+  });
+
+  test("「给 X 加上摘要 Y」→ updateNode summary（不能被当成建节点）", () => {
+    const p = plan("给 Redis 加上摘要 缓存热点数据", { t: 0, nodes: NODES, occupied: [] });
+    expect(p.calls).toHaveLength(1);
+    expect(p.calls[0]).toMatchObject({
+      name: "updateNode",
+      input: { id: "redis", summary: "缓存热点数据" },
+    });
+  });
+
+  test("「把 X 的摘要改成 Y」也能识别", () => {
+    const p = plan("把 Redis 的摘要改成 挡在读库之前的缓存", { t: 0, nodes: NODES, occupied: [] });
+    const call = p.calls[0];
+    expect(call?.name).toBe("updateNode");
+    if (call?.name === "updateNode") {
+      expect(call.input.id).toBe("redis");
+      expect(call.input.summary).toBe("挡在读库之前的缓存");
+    }
+  });
+});
+
+describe("移动意图（moveNode）", () => {
+  const POSITIONS = { gateway: { x: 0, y: 0 }, redis: { x: 680, y: 0 } };
+  const SIZE = { width: 250, height: 96 };
+
+  test("「把 X 挪到 Y 上面」→ moveNode 到 Y 上方空位", () => {
+    const p = plan("把网关挪到 Redis 上面", {
+      t: 0,
+      nodes: NODES,
+      occupied: RECTS,
+      positions: POSITIONS,
+    });
+    const call = p.calls[0];
+    expect(call?.name).toBe("moveNode");
+    if (call?.name === "moveNode") {
+      expect(call.input.id).toBe("gateway");
+      expect(call.input.x).toBe(680);
+      expect(call.input.y).toBe(-96 - 40); // redis.y - 高 - 间距
+    }
+  });
+
+  test("没有方向词时默认放到锚点右边", () => {
+    const p = plan("把网关放到 Redis 旁边", {
+      t: 0,
+      nodes: NODES,
+      occupied: RECTS,
+      positions: POSITIONS,
+    });
+    const call = p.calls[0];
+    if (call?.name === "moveNode") {
+      expect(call.input.x).toBe(680 + 250 + 40);
+      expect(call.input.y).toBe(0);
+    }
+  });
+
+  test("找不到锚点时不产生 moveNode", () => {
+    const p = plan("把网关挪到不存在的东西上面", {
+      t: 0,
+      nodes: NODES,
+      occupied: RECTS,
+      positions: POSITIONS,
+    });
+    expect(p.calls.filter((c) => c.name === "moveNode")).toEqual([]);
+  });
+});
+
+describe("slotBeside", () => {
+  const POSITIONS = { redis: { x: 680, y: 0 } };
+  const SIZE = { width: 250, height: 96 };
+
+  test("右边有空位时直接落位", () => {
+    const [x, y] = slotBeside(POSITIONS, [], "redis", "right", SIZE, 40);
+    expect([x, y]).toEqual([680 + 250 + 40, 0]);
+  });
+
+  test("目标方向被挡住时继续向外找", () => {
+    const blocked = [{ x: 970, y: 0, width: 250, height: 96 }];
+    const [x, y] = slotBeside(POSITIONS, blocked, "redis", "right", SIZE, 40);
+    expect([x, y]).toEqual([970 + 250 + 40, 0]);
+  });
+});
+
+describe("指定起点连线（connect）", () => {
+  test("「把 X 连到 Y」→ 从 X 连到 Y，不走 lastSpawned", () => {
+    const p = plan("把网关连到 Redis 缓存", {
+      t: 0,
+      nodes: NODES,
+      occupied: [],
+      lastSpawnedId: "n-kafka-99",
+    });
+    const conn = p.calls[0];
+    expect(conn?.name).toBe("connect");
+    if (conn?.name === "connect") {
+      expect(conn.input.from).toBe("gateway");
+      expect(conn.input.to).toBe("redis");
+    }
   });
 });
 

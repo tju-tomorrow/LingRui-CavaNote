@@ -6,7 +6,7 @@
  * 下游一行都不用改。
  */
 import type { KnowledgeNode, NodeKind } from "@lingrui/knowledge";
-import type { CanvasToolCall } from "./executor";
+import type { CanvasToolCall, UpdateNodeInput } from "./executor";
 
 const KIND_HINTS: Array<{ kind: NodeKind; words: string[] }> = [
   { kind: "cache", words: ["redis", "缓存", "memcached"] },
@@ -31,6 +31,36 @@ const CONNECT_SPLIT = /(?:并|和|与|，|,|、)?\s*(?:连到|连接到|接到|�
 const DELETE_PATTERN = /(?:删掉|删除|去掉|移除|delete|remove)\s*[:：]?\s*(.+)/i;
 /** "把 X 去掉" / "将 X 删除"（动词在后） */
 const DELETE_PATTERN_SUFFIX = /(?:把|将)\s*(.+?)\s*(?:删掉|删除|去掉|移除)/i;
+
+/** "把 X 改名为 Y" / "把 X 改成 Y" / "将 X 重命名为 Y" */
+const RENAME_PATTERN =
+  /(?:把|将)\s*(.+?)\s*(?:改名为|重命名为|改叫|改成|改为)\s*[:：]?\s*(.+)$/;
+/** "给 X 加上摘要 Y" */
+const SUMMARY_GIVE_PATTERN = /(?:给|为)\s*(.+?)\s*(?:加上|添加|加个)\s*摘要\s*[:：]?\s*(.+)$/;
+/** "把 X 的摘要改成 Y" */
+const SUMMARY_OF_PATTERN = /(?:把|将)\s*(.+?)\s*的摘要\s*(?:改成|改为|是)\s*[:：]?\s*(.+)$/;
+/** "把 X 移到 Y 上面" / "把 X 挪到 Y 旁边" / "把 X 放到 Y 左边" */
+const MOVE_PATTERN = /(?:把|将)\s*(.+?)\s*(?:移到|移动到|挪到|拖到|放到)\s*(.+)$/;
+/** "把 X 连到 Y"（指定起点的连线；不带"把 X"的短句走 lastSpawned 分支） */
+const CONNECT_SUBJECT_PATTERN = /(?:把|将)\s*(.+?)\s*(?:连到|连接到|接到|接入到)\s*(.+)$/;
+
+/** 把方向词从目的地文本里剥掉（"Redis 上面" → "Redis"），再去匹配节点 */
+const DIRECTION_WORDS =
+  /(?:的)?(?:左边|左侧|左面|右边|右侧|右面|上面|上边|上方|上侧|下面|下边|下方|下侧|旁边|附近|前面|后面|中心|中间)\s*/g;
+
+type Direction = "left" | "right" | "up" | "down";
+const DIRECTION_HINTS: Array<[RegExp, Direction]> = [
+  [/左边|左侧|左面/, "left"],
+  [/右边|右侧|右面/, "right"],
+  [/上面|上边|上方|上侧/, "up"],
+  [/下面|下边|下方|下侧/, "down"],
+];
+const DIRECTION_NAME: Record<Direction, string> = {
+  left: "左边",
+  right: "右边",
+  up: "上面",
+  down: "下面",
+};
 
 /** 口语量词前缀 */
 const QUANTIFIER = /^(?:一个|一条|一台|一组|个|些)\s*/;
@@ -81,6 +111,45 @@ export function freeSlot(
   return [right + gap, centerY];
 }
 
+/**
+ * 在锚点节点某个方向的旁边找一个空位（沿该方向逐格向外找，直到与所有人都错开）。
+ *
+ * otherRects 应该**排除被移动的那个节点自己**（它马上要离开当前位置），
+ * 否则必然和自己的旧位置重叠、永远找不着空位。
+ */
+export function slotBeside(
+  positions: Record<string, { x: number; y: number }>,
+  otherRects: SlotRect[],
+  anchorId: string,
+  dir: Direction,
+  size: { width: number; height: number } = DEFAULT_NODE_SIZE,
+  gap = 40,
+): [number, number] {
+  const anchor = positions[anchorId] ?? { x: 0, y: 0 };
+  const base =
+    dir === "right"
+      ? { x: anchor.x + size.width + gap, y: anchor.y }
+      : dir === "left"
+        ? { x: anchor.x - size.width - gap, y: anchor.y }
+        : dir === "up"
+          ? { x: anchor.x, y: anchor.y - size.height - gap }
+          : { x: anchor.x, y: anchor.y + size.height + gap };
+
+  const alongX = dir === "left" || dir === "right";
+  const sign = dir === "left" || dir === "up" ? -1 : 1;
+  const step = alongX ? size.width + gap : size.height + gap;
+
+  for (let i = 0; i < 24; i += 1) {
+    const at = {
+      x: base.x + (alongX ? i * sign * step : 0),
+      y: base.y + (alongX ? 0 : i * sign * step),
+    };
+    const rect = { ...at, width: size.width, height: size.height };
+    if (!otherRects.some((r) => overlaps(r, rect))) return [at.x, at.y];
+  }
+  return [base.x, base.y];
+}
+
 export interface PlanContext {
   t: number;
   nodes: KnowledgeNode[];
@@ -89,6 +158,8 @@ export interface PlanContext {
   /** 上一轮 AI 刚生成的节点，用于"把它连到 X" */
   lastSpawnedId?: string;
   nodeSize?: { width: number; height: number };
+  /** 节点当前位置（用于"移到 X 旁边"）；调用方传 layout 快照即可 */
+  positions?: Record<string, { x: number; y: number }>;
 }
 
 export interface Plan {
@@ -148,8 +219,75 @@ export function plan(message: string, ctx: PlanContext): Plan {
   const addMatch = ADD_PATTERN.exec(text);
   const connectTarget = findConnectTarget(text, ctx.nodes);
 
+  // 提取正则分组（TS 对正则字面量推断分组可能是 undefined，这里折成 string）
+  const g = (m: RegExpExecArray | null, i: number): string => (m?.[i] ?? "").trim();
+
+  // 0) "给 X 加上摘要 Y" / "把 X 的摘要改成 Y" → updateNode(summary)
+  //    必须先于 ADD："给网关加上摘要 …" 里也有"加上"，否则会被当成建节点
+  const summaryMatch = SUMMARY_GIVE_PATTERN.exec(text) ?? SUMMARY_OF_PATTERN.exec(text);
+  if (summaryMatch?.[2]) {
+    const subject = findTarget(clean(g(summaryMatch, 1)), ctx.nodes);
+    if (subject) {
+      const summary = clean(g(summaryMatch, 2));
+      return {
+        calls: [{ name: "updateNode", input: { id: subject.id, summary } }],
+        reply: `已把「${subject.title}」的摘要更新为：「${summary}」。`,
+      };
+    }
+  }
+
+  // 0.5) "把 X 改名为 Y" → updateNode(title)，新名是类型词时顺带改 kind
+  const renameMatch = RENAME_PATTERN.exec(text);
+  if (renameMatch?.[2]) {
+    const subject = findTarget(clean(g(renameMatch, 1)), ctx.nodes);
+    if (subject) {
+      const input: UpdateNodeInput = { id: subject.id, title: clean(g(renameMatch, 2)) };
+      const kind = inferKind(input.title ?? "");
+      if (kind !== "concept") input.kind = kind;
+      return {
+        calls: [{ name: "updateNode", input }],
+        reply: `已把「${subject.title}」改名为「${input.title}」。`,
+      };
+    }
+  }
+
+  // 0.8) "把 X 移到 Y 上面/旁边/左边…" → moveNode（目标若是人摆过的位置，executor 挂起等确认）
+  const moveMatch = MOVE_PATTERN.exec(text);
+  if (moveMatch?.[2]) {
+    const subject = findTarget(clean(g(moveMatch, 1)), ctx.nodes);
+    const destText = clean(g(moveMatch, 2));
+    const anchor = findTarget(destText.replace(DIRECTION_WORDS, ""), ctx.nodes);
+    if (subject && anchor && subject.id !== anchor.id) {
+      const dir = DIRECTION_HINTS.find(([re]) => re.test(destText))?.[1] ?? "right";
+      const positions = ctx.positions ?? {};
+      const movingAt = positions[subject.id];
+      // 排除被移动节点自己的旧位置：它马上要离开，不算障碍
+      const others = ctx.occupied.filter(
+        (r) => !movingAt || Math.abs(r.x - movingAt.x) > 0.5 || Math.abs(r.y - movingAt.y) > 0.5,
+      );
+      const at = slotBeside(positions, others, anchor.id, dir, size);
+      return {
+        calls: [{ name: "moveNode", input: { id: subject.id, x: at[0], y: at[1] } }],
+        reply: `已把「${subject.title}」挪到「${anchor.title}」${DIRECTION_NAME[dir]}。`,
+      };
+    }
+  }
+
+  // 0.9) "把 X 连到 Y" → 指定起点的连线（不带"把"的短句走 lastSpawned 分支）
+  const explicitConnect = CONNECT_SUBJECT_PATTERN.exec(text);
+  if (explicitConnect?.[2]) {
+    const from = findTarget(clean(g(explicitConnect, 1)), ctx.nodes);
+    const to = findTarget(clean(g(explicitConnect, 2)), ctx.nodes);
+    if (from && to && from.id !== to.id) {
+      return {
+        calls: [{ name: "connect", input: { from: from.id, to: to.id, kind: "calls", label: "接入" } }],
+        reply: `已把「${from.title}」连到「${to.title}」。`,
+      };
+    }
+  }
+
   // 1) "添加 X"（若同句还有"连到 Y"，一并接上）
-  if (addMatch?.[1]) {
+  if (addMatch?.[1] && !/^(?:把|将)/.test(text)) {
     // "添加一个 Kafka 并连到后端服务" → 标题只取 "Kafka"
     const withoutConnect = addMatch[1].split(CONNECT_SPLIT)[0] ?? addMatch[1];
     const raw = clean(withoutConnect);

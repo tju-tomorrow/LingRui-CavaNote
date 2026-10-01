@@ -1,0 +1,216 @@
+/* 应用外壳（P1.5）—— 局部样式，通过更具体的选择器覆盖 index.css，不改动它 */
+
+/* 布局：左图标栏 | 侧栏 | 主区 */
+.app.lr {
+  grid-template-columns: 56px 288px 1fr;
+  grid-template-areas:
+    "top top top"
+    "rail side main";
+}
+
+/* ---- 顶栏 ---- */
+.tb .tb-search {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 1;
+  max-width: 520px;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: text;
+}
+.tb .tb-search kbd {
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: var(--muted);
+}
+.tb .tb-spacer { flex: 1; }
+.tb .tb-icon {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tb .tb-icon:not(:disabled):hover { background: var(--panel); }
+.tb .tb-icon:disabled { opacity: 0.35; cursor: default; }
+.tb .tb-avatar {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- 左图标栏 ---- */
+.rail {
+  grid-area: rail;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0;
+}
+.rail .rail-item {
+  width: 44px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.rail .rail-item.active { background: #eef0ff; color: var(--accent); }
+.rail .rail-icon { font-size: 16px; line-height: 1; }
+.rail .rail-label { font-size: 10px; }
+
+/* ---- 侧栏 / 笔记树 ---- */
+.app.lr .sidebar { grid-area: side; }
+.tree .tree-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 4px 8px;
+  font-size: 13px; font-weight: 600; color: var(--text);
+}
+.tree .tree-actions button {
+  border: none; background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 14px; padding: 0 4px;
+}
+.tree .tree-group {
+  font-size: 11px; color: var(--muted);
+  padding: 8px 6px 2px;
+}
+.tree .tree-node {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; text-align: left;
+  border: none; background: transparent; color: var(--text);
+  font-size: 13px; padding: 4px 6px; border-radius: 6px; cursor: pointer;
+}
+.tree .tree-node:hover { background: #f1f1f6; }
+.tree .tree-node.active { background: #eef0ff; color: var(--accent); }
+.tree .tree-dot {
+  width: 7px; height: 7px; border-radius: 2px; flex: none;
+  background: var(--muted);
+}
+.tree .tree-dot.kind-gateway { background: #5b5bd6; }
+.tree .tree-dot.kind-service { background: #0f7b6c; }
+.tree .tree-dot.kind-cache { background: #c2410c; }
+.tree .tree-dot.kind-database { background: #1d4ed8; }
+.tree .tree-dot.kind-queue { background: #b45309; }
+.tree .tree-dot.kind-registry { background: #7c3aed; }
+.tree .tree-dot.kind-monitor { background: #334155; }
+.view-placeholder { padding: 16px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+
+/* ---- 主标题区 ---- */
+.doc-header {
+  grid-column: 1 / -1;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.doc-header .doc-title { margin: 0; font-size: 22px; font-weight: 700; }
+.doc-header .doc-meta { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.doc-header .doc-actions { display: flex; gap: 8px; flex: none; }
+.doc-header .dh-btn {
+  border: 1px solid var(--border); background: #fff; color: var(--text);
+  border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+}
+.doc-header .dh-btn:disabled { opacity: 0.4; cursor: default; }
+.doc-header .dh-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* workspace 顶上多一行标题区 */
+.app.lr .workspace { grid-template-rows: auto 1fr auto; }
+
+/* ---- 命令面板（⌘K） ---- */
+.palette-mask {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(20, 20, 30, 0.28);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 12vh;
+}
+.palette {
+  width: min(560px, 90vw);
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+  overflow: hidden;
+}
+.palette .palette-input {
+  width: 100%; border: none; outline: none;
+  padding: 14px 16px; font-size: 15px;
+  border-bottom: 1px solid var(--border);
+}
+.palette .palette-list { list-style: none; margin: 0; padding: 6px; max-height: 46vh; overflow: auto; }
+.palette .palette-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: none; background: transparent; text-align: left;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--text);
+}
+.palette .palette-item:hover { background: #eef0ff; }
+.palette .palette-kind {
+  font-size: 10px; color: var(--accent); background: #eef0ff;
+  padding: 1px 6px; border-radius: 999px; flex: none;
+}
+.palette .palette-title { font-size: 13px; font-weight: 600; flex: none; }
+.palette .palette-sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette .palette-empty { padding: 14px; color: var(--muted); font-size: 13px; }
+
+/* ---- 演示模式 ---- */
+.app.present { grid-template-columns: 1fr; grid-template-areas: "main"; grid-template-rows: 1fr; }
+.app.present .topbar,
+.app.present .rail,
+.app.present .sidebar,
+.app.present .doc-header,
+.app.present .doc-pane { display: none; }
+.app.present .workspace { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+
+/* ---- 暗色 ---- */
+:root[data-theme="dark"] {
+  --bg: #17171c;
+  --panel: #1f1f26;
+  --border: #33333d;
+  --text: #e8e8ea;
+  --muted: #9a9aa5;
+}
+:root[data-theme="dark"] .rail .rail-item.active,
+:root[data-theme="dark"] .tree .tree-node.active,
+:root[data-theme="dark"] .palette .palette-item:hover { background: #2a2a46; }
+:root[data-theme="dark"] .palette,
+:root[data-theme="dark"] .doc-header .dh-btn { background: #1f1f26; color: var(--text); }
+
+/* ---- toast ---- */
+.lr-toast {
+  position: fixed;
+  left: 50%; bottom: 40px; transform: translate(-50%, 8px);
+  background: #1e1e1e; color: #fff;
+  font-size: 13px; padding: 8px 14px; border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+  opacity: 0; transition: opacity 0.18s, transform 0.18s;
+  z-index: 80; pointer-events: none;
+}
+.lr-toast.in { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---- 只读分享横幅 ---- */
+.readonly-banner {
+  position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+  background: #fff7e0; color: #8a5a00; border: 1px solid #f0d48a;
+  font-size: 12px; padding: 4px 12px; border-radius: 999px; z-index: 70;
+}

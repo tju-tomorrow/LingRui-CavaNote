@@ -101,3 +101,22 @@ export function removeKnowledgeCard(nodeId: string): boolean {
   editor.removeBlocks([block.id]);
   return true;
 }
+
+/**
+ * 文档正文 → Markdown（导出用）。
+ *
+ * 自定义块（knowledgeCard）由 BlockNote 尽力转换；没有该 API 时返回空串，
+ * 调用方据此只导出知识节点部分。
+ */
+export async function docToMarkdown(): Promise<string> {
+  if (!editor) return "";
+  const withMd = editor as AnyEditor & {
+    blocksToMarkdownLossy?: (blocks: unknown) => Promise<string>;
+  };
+  if (typeof withMd.blocksToMarkdownLossy !== "function") return "";
+  try {
+    return await withMd.blocksToMarkdownLossy(editor.document);
+  } catch {
+    return "";
+  }
+}

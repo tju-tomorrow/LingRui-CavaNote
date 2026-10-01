@@ -118,6 +118,18 @@ export function upsertChapter(doc: Y.Doc, chapter: Chapter): void {
   chapters.push([chapter]);
 }
 
+/**
+ * 整组替换（清空重写）。
+ *
+ * 用于「先推导、后人工改」的落盘（PRD/演出层.md §4）：分镜由动作流自动切分，
+ * 种进 Y.Doc 一次；此后人工的重命名 / 合并 / 排序都改这份，不再被推导覆盖。
+ */
+export function replaceChapters(doc: Y.Doc, chapters: Chapter[]): void {
+  const arr = getChapters(doc);
+  arr.delete(0, arr.length);
+  if (chapters.length > 0) arr.push(chapters);
+}
+
 // ---- progress：按 userId 分桶 ----
 
 type ProgressRoot = Record<string, Record<NodeId, NodeProgress>>;

@@ -56,9 +56,8 @@ export const VRM_ASSETS = {
 } as const;
 
 /**
- * TODO(P2)：用 three-vrm 实现。
- * 目前只导出接口与常量，避免引入未使用的重依赖。
+ * ⚠️ VRM 形态**未实现**（原会抛错的 `createMascotController` 已移除）。
+ *
+ * 当前生效的宠物实现是**像素形态**：`pixel.ts`（帧生成）+ `pet.ts`（控制器）。
+ * 上面的接口/常量保留作接入 VRM 时的规格参考（见 ADR-0004、PRD/宠物.md）。
  */
-export function createMascotController(_canvas: HTMLCanvasElement): MascotController {
-  throw new Error("createMascotController: 未实现（P2 阶段接入 three-vrm）");
-}

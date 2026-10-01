@@ -6,10 +6,13 @@
 import { useEffect, useState } from "react";
 import {
   getAnnotations,
+  getChapters,
   getLayout,
   getNodes,
   getOrder,
+  listChapters,
   type Annotation,
+  type Chapter,
   type KnowledgeNode,
 } from "@lingrui/knowledge";
 import { ydoc } from "./doc";
@@ -84,6 +87,26 @@ export function useAnnotations(): Annotation[] {
   }, []);
 
   return annotations;
+}
+
+/**
+ * 订阅 Y.Doc 里的章节 / 分镜（ROOT_CHAPTERS）。
+ *
+ * 分镜最初由动作流推导种进来（见 chat/agent.ts 的 shotsOf），
+ * 之后人工编辑改的都是这份 → 这里永远是最新且可持续化的。
+ */
+export function useKnowledgeChapters(): Chapter[] {
+  const [chapters, setChapters] = useState<Chapter[]>(() => listChapters(ydoc));
+
+  useEffect(() => {
+    const update = () => setChapters(listChapters(ydoc));
+    update();
+    const arr = getChapters(ydoc);
+    arr.observe(update);
+    return () => arr.unobserve(update);
+  }, []);
+
+  return chapters;
 }
 
 /** 按 id 取单个节点（节点数量小，线性查找足够） */
