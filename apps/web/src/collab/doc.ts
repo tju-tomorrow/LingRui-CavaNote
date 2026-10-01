@@ -10,12 +10,21 @@
 import * as Y from "yjs";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { HocuspocusProvider } from "@hocuspocus/provider";
-import { createKnowledgeDoc, getNodes, upsertNode } from "@lingrui/knowledge";
+import {
+  createKnowledgeDoc,
+  getNodes,
+  listNotes,
+  upsertNode,
+  upsertNote,
+  type NoteMeta,
+} from "@lingrui/knowledge";
 import { authToken } from "../auth/store";
 import { SEED_NODES } from "./seed";
 
 export const DOC_ID = "lingrui-demo";
+/** 默认笔记的正文 fragment：沿用老名字，老数据零迁移 */
 export const BLOCK_FRAGMENT = "document-store";
+export const DEFAULT_NOTE_TITLE = "一次请求的完整旅程";
 
 export const ydoc = createKnowledgeDoc({ id: DOC_ID, title: "一次请求的完整旅程" });
 
@@ -52,14 +61,32 @@ export const awareness = remoteProvider?.awareness ?? null;
 
 /** 种子知识：等本地库加载完再写，避免和已有数据打架（Yjs 会按 id 合并） */
 export const seeded: Promise<void> = localPersistence.whenSynced.then(() => {
-  if (getNodes(ydoc).size > 0) return;
   ydoc.transact(() => {
-    for (const node of SEED_NODES) upsertNode(ydoc, node);
+    // 笔记：老数据没有 notes root，但正文已经在 document-store 上 →
+    // 把它认领为「默认笔记」，不做任何迁移
+    if (listNotes(ydoc).length === 0) {
+      upsertNote(ydoc, {
+        id: "note-main",
+        title: DEFAULT_NOTE_TITLE,
+        fragment: BLOCK_FRAGMENT,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        order: 0,
+      });
+    }
+
+    if (getNodes(ydoc).size === 0) {
+      for (const node of SEED_NODES) upsertNode(ydoc, node);
+    }
   });
 });
 
-export function blockFragment(): Y.XmlFragment {
-  return ydoc.getXmlFragment(BLOCK_FRAGMENT);
+/** 默认笔记 id（笔记树/编辑器都从它起步） */
+export const DEFAULT_NOTE_ID = "note-main";
+
+/** 某个笔记的正文 fragment */
+export function blockFragment(note?: NoteMeta | null): Y.XmlFragment {
+  return ydoc.getXmlFragment(note?.fragment ?? BLOCK_FRAGMENT);
 }
 
 // 开发期调试入口：控制台里 __lingrui.ydoc / __lingrui.seeded 可直接查

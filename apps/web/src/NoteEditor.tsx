@@ -29,7 +29,8 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { withCollaboration } from "@blocknote/core/yjs";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
-import { awareness, blockFragment } from "./collab/doc";
+import { awareness, blockFragment, DEFAULT_NOTE_ID } from "./collab/doc";
+import type { NoteMeta } from "@lingrui/knowledge";
 import { registerEditor } from "./editor/bridge";
 import { schema } from "./editor/schema";
 import { isReadOnlyShare } from "./shell/share";
@@ -57,12 +58,18 @@ const INITIAL_CONTENT = [
   { type: "knowledgeCard" as const, props: { nodeId: "redis" } },
 ];
 
-export function NoteEditor() {
+/**
+ * 文档视图。
+ *
+ * `note` = 当前打开的笔记（PRD/主界面.md §2.3）。每篇笔记的正文各占一个
+ * Y.XmlFragment，所以换笔记时必须**重建编辑器** —— 调用方用 `key={note.id}` 做到。
+ */
+export function NoteEditor({ note }: { note: NoteMeta }) {
   const editor = useCreateBlockNote(
     withCollaboration({
       schema,
       collaboration: {
-        fragment: blockFragment(),
+        fragment: blockFragment(note),
         user: { name: "你", color: "#5b5bd6" },
         ...(awareness ? { provider: { awareness } } : {}),
       },
@@ -77,7 +84,9 @@ export function NoteEditor() {
   // 必须等视图真的挂好了、fragment 依然为空，replaceBlocks 才会触发 diff 写回。
   useEffect(() => {
     const seed = (): boolean => {
-      if (blockFragment()._length > 0) return true; // 已有内容（不管是旧的还是别人种的），停
+      // 只给默认笔记种示例内容；新建的笔记就该是空的
+      if (note.id !== DEFAULT_NOTE_ID) return true;
+      if (blockFragment(note)._length > 0) return true; // 已有内容（不管是旧的还是别人种的），停
       const doc = editor.document;
       const first = doc[0];
       // 空数组是 truthy 的，所以要显式判断：段落内容必须是不存在 / 空数组才叫空
@@ -88,7 +97,7 @@ export function NoteEditor() {
         doc.length === 1 && first?.type === "paragraph" && contentIsEmpty;
       if (!firstIsEmptyPlaceholder) return true; // 文档非空但 fragment 空：等 ySync 同步即可
       editor.replaceBlocks(doc, INITIAL_CONTENT);
-      return blockFragment()._length > 0;
+      return blockFragment(note)._length > 0;
     };
 
     let tries = 0;
@@ -97,7 +106,7 @@ export function NoteEditor() {
       if (seed() || tries > 30) window.clearInterval(timer);
     }, 120);
     return () => window.clearInterval(timer);
-  }, [editor]);
+  }, [editor, note]);
 
   // 把编辑器交给 bridge，聊天/画布才能操作文档
   useEffect(() => {

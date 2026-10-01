@@ -113,6 +113,7 @@ export interface KnowledgeDocMeta {
 // Y.Doc schema
 // ---------------------------------------------------------------------------
 
+export const ROOT_NOTES = "notes";
 export const ROOT_META = "meta";
 export const ROOT_NODES = "nodes";
 export const ROOT_ORDER = "order";
@@ -120,6 +121,24 @@ export const ROOT_LAYOUT = "layout";
 export const ROOT_ANNOTATIONS = "annotations";
 export const ROOT_CHAPTERS = "chapters";
 export const ROOT_PROGRESS = "progress";
+
+export type NoteId = string;
+
+/**
+ * 一篇笔记的元信息（正文在它自己的 Y.XmlFragment 里）。
+ *
+ * `fragment` 存名字而不是推导，是为了兼容老数据：默认笔记的正文
+ * 就在老的 `document-store` 上，不用迁移。
+ */
+export interface NoteMeta {
+  id: NoteId;
+  title: string;
+  /** 正文所在的 Y.XmlFragment 名 */
+  fragment: string;
+  createdAt: number;
+  updatedAt: number;
+  order?: number;
+}
 
 /** 画布上的位置。属于“表现”，但存在同一个 Y.Doc 里以便持久化与协同。 */
 export interface NodePosition {

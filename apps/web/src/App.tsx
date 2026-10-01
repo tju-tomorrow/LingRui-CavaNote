@@ -20,8 +20,10 @@ import { revealNode } from "./editor/bridge";
 import { PetLayer } from "./pet/PetLayer";
 import { TimelineBar } from "./timeline/TimelineBar";
 import { useFocus } from "./state/focus";
+import { useActiveNote, setActiveNote } from "./state/notes";
+import { useKnowledgeNotes } from "./collab/useKnowledge";
 import { useAuth } from "./auth/store";
-import { reconnectCollab } from "./collab/doc";
+import { DEFAULT_NOTE_ID, reconnectCollab, seeded } from "./collab/doc";
 import { TopBar } from "./shell/TopBar";
 import { IconRail, type ShellView } from "./shell/IconRail";
 import { NoteTree } from "./shell/NoteTree";
@@ -42,6 +44,8 @@ const PLACEHOLDER: Record<Exclude<ShellView, "notes">, string> = {
 export function App(): JSX.Element {
   const focus = useFocus();
   const auth = useAuth();
+  const notes = useKnowledgeNotes();
+  const activeNoteId = useActiveNote();
   const [view, setView] = useState<ShellView>("notes");
   const [present, setPresent] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -56,6 +60,18 @@ export function App(): JSX.Element {
   useEffect(() => {
     reconnectCollab();
   }, [auth.token]);
+
+  // 笔记列表就绪后选中一篇（老数据认领为「默认笔记」）
+  useEffect(() => {
+    if (activeNoteId && notes.some((n) => n.id === activeNoteId)) return;
+    void seeded.then(() => {
+      const next = notes.find((n) => n.id === DEFAULT_NOTE_ID) ?? notes[0];
+      if (next) setActiveNote(next.id);
+    });
+  }, [notes, activeNoteId]);
+
+  const activeNote =
+    notes.find((n) => n.id === activeNoteId) ?? notes.find((n) => n.id === DEFAULT_NOTE_ID) ?? notes[0];
 
   // ⌘K / Ctrl+K 打开命令面板；Esc 退出面板与演示
   useEffect(() => {
@@ -98,8 +114,9 @@ export function App(): JSX.Element {
         <DocHeader />
 
         <section className="pane doc-pane">
-          <div className="pane-head">文档视图 · BlockNote</div>
-          <NoteEditor />
+          <div className="pane-head">文档视图 · {activeNote?.title ?? "BlockNote"}</div>
+          {/* key：换笔记必须重建编辑器（BlockNote 的 collaboration fragment 创建时绑定） */}
+          {activeNote ? <NoteEditor key={activeNote.id} note={activeNote} /> : null}
         </section>
 
         <section className="pane canvas">

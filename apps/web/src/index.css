@@ -704,6 +704,82 @@ html[data-glass="desktop"] .bn-container {
   white-space: pre-wrap;
 }
 
+/* 笔记树：可打开的笔记条目 + 行内重命名 */
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tree-note-btn {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-note-actions {
+  display: none;
+  gap: 2px;
+  flex: none;
+}
+
+.tree-item:hover .tree-note-actions {
+  display: flex;
+}
+
+.tree-note-actions button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 4px;
+}
+
+.tree-note-actions button:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+
+.tree-note-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.tree-rename {
+  font: inherit;
+  color: var(--text);
+  border: 1px solid var(--accent, #5b5bd6);
+  border-radius: 5px;
+  background: #fff;
+  padding: 2px 6px;
+  margin: 2px 8px;
+  outline: none;
+}
+
+/* 命令面板分组 */
+.palette-group {
+  list-style: none;
+}
+
+.palette-group-label {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 6px 10px 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* 登录 / 注册弹层 */
 .lr-modal {
   position: fixed;

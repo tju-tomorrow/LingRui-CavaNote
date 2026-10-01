@@ -9,11 +9,14 @@ import {
   getChapters,
   getLayout,
   getNodes,
+  getNotes,
   getOrder,
   listChapters,
+  listNotes,
   type Annotation,
   type Chapter,
   type KnowledgeNode,
+  type NoteMeta,
 } from "@lingrui/knowledge";
 import { ydoc } from "./doc";
 import { layoutSnapshot } from "./layout";
@@ -107,6 +110,26 @@ export function useKnowledgeChapters(): Chapter[] {
   }, []);
 
   return chapters;
+}
+
+/**
+ * 订阅笔记列表（ROOT_NOTES）。
+ *
+ * 「知识是全局的、笔记是多份的」：节点列表不随笔记切换而变，
+ * 所以笔记树与命令面板都从这里读，互不影响。
+ */
+export function useKnowledgeNotes(): NoteMeta[] {
+  const [notes, setNotes] = useState<NoteMeta[]>(() => listNotes(ydoc));
+
+  useEffect(() => {
+    const update = () => setNotes(listNotes(ydoc));
+    update();
+    const map = getNotes(ydoc);
+    map.observe(update);
+    return () => map.unobserve(update);
+  }, []);
+
+  return notes;
 }
 
 /** 按 id 取单个节点（节点数量小，线性查找足够） */
