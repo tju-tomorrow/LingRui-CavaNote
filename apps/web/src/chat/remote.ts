@@ -15,8 +15,17 @@ export type RemoteEvent =
   | { type: "error"; message: string }
   | { type: "done" };
 
-/** "/api/chat"（vite 代理到协同服务）；显式设为 "off" 可强制只用本地讲解器 */
-export const CHAT_API: string = (import.meta.env.VITE_CHAT_API as string | undefined) ?? "/api/chat";
+/** 桌面端桥（preload 注入）；web 版不存在 */
+const bridge = typeof window === "undefined" ? undefined : window.lingrui;
+
+/**
+ * 后端目标解析顺序：
+ *   1. 桌面端内嵌服务（随机端口 + 一次性 token，Key 只在主进程）
+ *   2. web 版：Vite 代理的 /api/chat
+ *   3. 显式设 "off" 可强制只用本地 planner
+ */
+export const CHAT_API: string =
+  bridge?.chatApi ?? (import.meta.env.VITE_CHAT_API as string | undefined) ?? "/api/chat";
 
 export const remoteEnabled = CHAT_API !== "off";
 
@@ -26,7 +35,10 @@ export async function* streamRemote(
 ): AsyncGenerator<RemoteEvent> {
   const response = await fetch(CHAT_API, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(bridge?.token ? { "x-lingrui-token": bridge.token } : {}),
+    },
     body: JSON.stringify({ messages }),
     signal,
   });

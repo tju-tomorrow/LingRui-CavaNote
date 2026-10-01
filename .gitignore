@@ -20,3 +20,7 @@ packages/vendor/**/dist/
 
 # 注意：packages/vendor/** 是上游源码，会被 bun test 扫到。
 # 测试入口已在根 package.json 的 test 脚本里显式限定路径。
+
+# 桌面端产物
+apps/desktop/out/
+apps/desktop/release/

@@ -8,7 +8,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@lingrui/anim": "workspace:*"
+    "@lingrui/anim": "workspace:*",
+    "@lingrui/knowledge": "workspace:*"
   },
   "peerDependencies": {
     "three": "^0.186.1",

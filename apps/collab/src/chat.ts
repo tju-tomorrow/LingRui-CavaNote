@@ -23,6 +23,8 @@ function llmConfig() {
     baseUrl: process.env.OPENAI_BASE_URL ?? DEFAULT_BASE_URL,
     model: process.env.LLM_MODEL ?? DEFAULT_MODEL,
     apiKey: process.env.OPENAI_API_KEY ?? "",
+    // 部分网关（opencode-go 等）要求会话标头；未设置则不发
+    session: process.env.LLM_SESSION ?? "",
   };
 }
 
@@ -72,7 +74,7 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
     return;
   }
 
-  const { baseUrl, model, apiKey } = llmConfig();
+  const { baseUrl, model, apiKey, session } = llmConfig();
 
   if (!apiKey) {
     res.writeHead(503, { "content-type": "application/json" });
@@ -106,6 +108,7 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${apiKey}`,
+        ...(session ? { "x-opencode-session": session } : {}),
       },
       body: JSON.stringify({
         model,

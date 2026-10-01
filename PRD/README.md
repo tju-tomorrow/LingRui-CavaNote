@@ -9,6 +9,7 @@
 | [主界面.md](./主界面.md) | 共编闭环 + 逐区盘点 + 交互规格 v1 + 验收 | 全阶段 |
 | [知识模型.md](./知识模型.md) | `KnowledgeNode` 扩字段 + `Annotation` + Y.Doc schema + `CanvasSnapshot` | P1.6 |
 | [演出层.md](./演出层.md) | 时间轴 / 分镜 / 吉祥物 / 笔记进度 / seek 四联动 | P2 |
+| [宠物.md](./宠物.md) | Personal Pet（个人宠物 / 讲解老师）：模型 + 工具 + 教学视频 | P2.5–P4 |
 | [导出与分发.md](./导出与分发.md) | 视频 / 文档导出、保存、分享、Orama 搜索 | P4 |
 | [桌面端.md](./桌面端.md) | Electron vs Tauri 决策 + 打包架构 | 交付形态 |
 
@@ -28,6 +29,7 @@
 | P1.5 | 主界面壳（导航 / 笔记树 / 主标题区 / 节点图标） |
 | P1.6 | 共编基座（Annotation + provenance + 增量 patch + 节点详情卡） |
 | P2 | 演出层（时间轴 + 分镜 + 进度 + 吉祥物占位） |
+| P2.5 | Personal Pet（像素宠物 + 教学状态 + `pet.*` 动作） |
 | P3 | AI 编排（真实 LLM + 工具 + Context Packer + 追问落盘） |
 | P4 | 落盘/分发（视频 / 文档导出 + 分享 + 搜索） |
 

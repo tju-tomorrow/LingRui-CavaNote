@@ -1,0 +1,35 @@
+{
+  "name": "@lingrui/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "LingRui Scribe 桌面端（Electron 壳 + 内嵌本地服务）",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "smoke": "electron-vite build && electron . --smoke",
+    "dist": "electron-vite build && electron-builder"
+  },
+  "dependencies": {
+    "@hocuspocus/extension-database": "^4.7.0",
+    "@hocuspocus/extension-redis": "^4.7.0",
+    "@hocuspocus/server": "^4.7.0",
+    "ioredis": "^6.0.0",
+    "jose": "^6.2.12",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@lingrui/collab": "workspace:*",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.1"
+  }
+}

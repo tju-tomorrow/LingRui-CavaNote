@@ -78,6 +78,30 @@ cp apps/web/.env.example apps/web/.env.local
 > Postgres / Redis 都是可选的：没有 DB 只告警不退出（文档不落库），
 > Redis 需要多实例时才设 `COLLAB_REDIS=1`。
 
+## 桌面端（Electron）
+
+```bash
+bun run dev:desktop      # 开发（electron-vite dev）
+bun run smoke:desktop    # 自检：内嵌服务 + token 边界 + renderer 真的渲染出画布
+bun run build:desktop    # 构建 main / preload / renderer
+bun run dist:desktop     # 打包（electron-builder）
+```
+
+桌面端不是另一个 app，而是把同一份 `apps/web` 装进本地容器（见 [PRD/桌面端.md](./PRD/桌面端.md)）：
+
+- **不 fork 前端**：`apps/desktop` 的 renderer 直接构建 `apps/web`，只换后端目标。
+  preload 把 `{ chatApi, collabUrl, token }` 注入 `window.lingrui`，
+  `apps/web` 优先用它，否则回退到 `VITE_*` 环境变量。
+- **内嵌服务**：Electron 主进程（Node）里跑 Hocuspocus + `/api/chat` 代理，
+  只绑 `127.0.0.1`、随机端口、一次性 token。**LLM Key 只在主进程**，renderer 永不接触。
+- **安全默认**：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`。
+
+> ⚠️ **首次安装需要下载 Electron 二进制**（~300MB）。若 GitHub 被墙，用镜像：
+> ```bash
+> ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" node apps/desktop/node_modules/electron/install.js
+> ```
+> 另外 bun 默认不跑 postinstall，所以 electron 的二进制不会被自动下载。
+
 ## 接真实 LLM
 
 在 `apps/collab/.env` 里填：

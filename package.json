@@ -17,6 +17,10 @@
   "scripts": {
     "dev": "bun run --filter @lingrui/web dev",
     "dev:collab": "bun run --filter @lingrui/collab dev",
+    "dev:desktop": "bun run --filter @lingrui/desktop dev",
+    "build:desktop": "bun run --filter @lingrui/desktop build",
+    "smoke:desktop": "bun run --filter @lingrui/desktop smoke",
+    "dist:desktop": "bun run --filter @lingrui/desktop dist",
     "build": "bun run --filter '*' build",
     "typecheck": "tsc --noEmit",
     "test": "bun test packages/ai packages/anim packages/canvas packages/knowledge packages/mascot packages/ui apps",

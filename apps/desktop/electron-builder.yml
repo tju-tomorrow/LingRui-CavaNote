@@ -1,0 +1,37 @@
+# electron-builder 打包配置（见 PRD/桌面端.md §4）
+appId: pro.lingrui.scribe
+productName: LingRui Scribe
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+
+# main/preload 是 bundle 产物；这些原生/重量级依赖保持外置，由 builder 收进 asar
+asarUnpack:
+  - node_modules/pg/**
+  - node_modules/ioredis/**
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+
+win:
+  target:
+    - nsis
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
+
+# 自动更新：静态托管（S3/MinIO）即可
+publish:
+  provider: generic
+  url: https://updates.lingrui.local/desktop

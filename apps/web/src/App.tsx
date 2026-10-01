@@ -19,6 +19,7 @@ import { CanvasStage } from "./CanvasStage";
 import { ChatPanel } from "./chat/ChatPanel";
 import { useKnowledgeNodes } from "./collab/useKnowledge";
 import { revealNode } from "./editor/bridge";
+import { PetLayer } from "./pet/PetLayer";
 import { useFocus } from "./state/focus";
 
 export function App(): JSX.Element {
@@ -83,6 +84,8 @@ export function App(): JSX.Element {
           <span>重播</span>
         </footer>
       </main>
+
+      <PetLayer />
     </div>
   );
 }

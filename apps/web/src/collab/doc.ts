@@ -21,15 +21,17 @@ export const ydoc = createKnowledgeDoc({ id: DOC_ID, title: "一次请求的完�
 /** 本地持久化：刷新/关页面不丢 */
 export const localPersistence = new IndexeddbPersistence(DOC_ID, ydoc);
 
-/** 远端协同：只在配置了服务端地址时启用 */
-const COLLAB_URL = import.meta.env.VITE_COLLAB_URL as string | undefined;
+/** 远端协同：桌面端用内嵌服务，web 版看 VITE_COLLAB_URL */
+const bridge = typeof window === "undefined" ? undefined : window.lingrui;
+const COLLAB_URL = bridge?.collabUrl ?? (import.meta.env.VITE_COLLAB_URL as string | undefined);
+const COLLAB_TOKEN = bridge?.token ?? (import.meta.env.VITE_COLLAB_TOKEN as string | undefined);
 
 export const remoteProvider: HocuspocusProvider | null = COLLAB_URL
   ? new HocuspocusProvider({
       url: COLLAB_URL,
       name: DOC_ID,
       document: ydoc,
-      token: () => (import.meta.env.VITE_COLLAB_TOKEN as string | undefined) ?? "",
+      token: () => COLLAB_TOKEN ?? "",
     })
   : null;
 
