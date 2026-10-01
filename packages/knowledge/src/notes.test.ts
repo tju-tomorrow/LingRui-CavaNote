@@ -6,6 +6,7 @@ import {
   createNote,
   listNotes,
   moveNote,
+  reconcileBlockIds,
   notePath,
   removeNoteDeep,
   setNoteTags,
@@ -15,6 +16,7 @@ import {
   renameNote,
   upsertNote,
 } from "./notes";
+import { readNode, upsertNode } from "./schema";
 
 function freshDoc(): Y.Doc {
   return new Y.Doc();
@@ -157,5 +159,51 @@ describe("目录树（分组）", () => {
     const note = createNote(doc, "带标签");
     setNoteTags(doc, note.id, ["架构", "入门"]);
     expect(readNote(doc, note.id)?.tags).toEqual(["架构", "入门"]);
+  });
+});
+
+describe("删除与对账（修复项）", () => {
+  test("removeNote 会连正文 fragment 一起清掉（不留幽灵 root）", () => {
+    const doc = freshDoc();
+    const note = createNote(doc, "要被删的");
+    const fragment = doc.getXmlFragment(note.fragment);
+    const paragraph = new Y.XmlElement("paragraph");
+    paragraph.insert(0, [new Y.XmlText("一些正文")]);
+    fragment.insert(0, [paragraph]);
+    expect(fragment.length).toBe(1);
+
+    removeNote(doc, note.id);
+    expect(readNote(doc, note.id)).toBeUndefined();
+    // fragment 作为 Y.Doc 顶层 root 依然存在，但内容必须被清空
+    expect(doc.getXmlFragment(note.fragment).length).toBe(0);
+  });
+
+  test("reconcileBlockIds 清掉指向已消失文档块的引用", () => {
+    const doc = freshDoc();
+    const note = createNote(doc, "有卡片的笔记");
+    const fragment = doc.getXmlFragment(note.fragment);
+    const container = new Y.XmlElement("blockcontainer");
+    container.setAttribute("id", "block-alive");
+    fragment.insert(0, [container]);
+
+    upsertNode(doc, {
+      id: "n1",
+      kind: "gateway",
+      title: "节点一",
+      relations: [],
+      blockIds: ["block-alive", "block-gone"],
+    });
+    upsertNode(doc, {
+      id: "n2",
+      kind: "cache",
+      title: "节点二",
+      relations: [],
+      blockIds: ["block-gone"],
+    });
+
+    const changed = reconcileBlockIds(doc, [note.fragment]);
+    expect(changed).toBe(2);
+    expect(readNode(doc, "n1")?.blockIds).toEqual(["block-alive"]);
+    expect(readNode(doc, "n2")?.blockIds).toEqual([]);
   });
 });

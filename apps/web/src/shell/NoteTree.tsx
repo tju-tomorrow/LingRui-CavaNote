@@ -14,6 +14,8 @@ import {
   buildNoteTree,
   createFolder,
   createNote,
+  listNotes,
+  reconcileBlockIds,
   removeNoteDeep,
   renameNote,
   type NoteMeta,
@@ -91,6 +93,14 @@ export function NoteTree() {
     const label = note.isFolder ? `分组「${note.title}」及其全部内容` : `笔记「${note.title}」`;
     if (!window.confirm(`删除${label}？`)) return;
     removeNoteDeep(ydoc, note.id);
+
+    // 删完对账：节点上指向「已不存在的文档块」的 blockIds 要清掉，
+    // 否则它们会一直挂着幽灵引用（blockIds 只写不读，没人会自愈）
+    const survivors = listNotes(ydoc)
+      .map((n) => n.fragment)
+      .filter(Boolean);
+    reconcileBlockIds(ydoc, survivors);
+
     if (active === note.id || !notes.some((n) => n.id === active)) {
       const next = notes.find((n) => n.id !== note.id && !n.isFolder);
       if (next) setActiveNote(next.id);

@@ -65,6 +65,22 @@ const INITIAL_CONTENT = [
  * Y.XmlFragment，所以换笔记时必须**重建编辑器** —— 调用方用 `key={note.id}` 做到。
  */
 export function NoteEditor({ note }: { note: NoteMeta }) {
+  // 分组没有正文：直接给一句提示，不要绑到空名字的 fragment 上（会污染 Y.Doc）
+  if (note.isFolder || note.fragment === "") {
+    return (
+      <div className="editor-host">
+        <p className="doc-folder-hint">
+          「{note.title}」是分组，没有正文。
+          <br />
+          在左边的树里展开它，或点它旁边的 ＋ 新建一篇笔记。
+        </p>
+      </div>
+    );
+  }
+  return <NoteEditorInner note={note} />;
+}
+
+function NoteEditorInner({ note }: { note: NoteMeta }) {
   const editor = useCreateBlockNote(
     withCollaboration({
       schema,

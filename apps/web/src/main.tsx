@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./index.css";
+import "./shell/polish.css";
 
 // macOS 玻璃：只有桌面端（preload 桥注入）才启用；web 版浏览器没有 vibrancy 材质，保持不透明。
 // 对应样式见 index.css 里的 html[data-glass="desktop"] 段。

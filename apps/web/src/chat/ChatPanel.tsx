@@ -28,7 +28,7 @@ import { ydoc } from "../collab/doc";
 import { useUndoState, undoRound } from "../state/history";
 import { registerAsk } from "./ask";
 import { commitFaqAnswer } from "./faq";
-import { isReadOnlyShare } from "../shell/share";
+import { useReadOnlyShare } from "../shell/share";
 import {
   resolvePending,
   clearPending,
@@ -165,12 +165,15 @@ function PendingPatches() {
  */
 function AskBridge() {
   const aui = useAui();
+  const readOnly = useReadOnlyShare();
   useEffect(() => {
+    // 只读视图不注册追问入口（askLingRui 里还有一道兑底）
+    if (readOnly) return;
     registerAsk((text) => {
       aui.thread.append(text);
     });
     return () => registerAsk(null);
-  }, [aui]);
+  }, [aui, readOnly]);
   return null;
 }
 
@@ -260,7 +263,7 @@ export function ChatPanel() {
   const adapter = useMemo(() => createAdapter(), []);
   const runtime = useLocalRuntime(adapter);
   // 只读分享视图里不让人继续对 AI 下指令（那会写 Y.Doc）
-  const readOnly = isReadOnlyShare();
+  const readOnly = useReadOnlyShare();
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>

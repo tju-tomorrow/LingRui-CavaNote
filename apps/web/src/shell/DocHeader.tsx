@@ -7,8 +7,9 @@
  * 日期 = 最后修改时间，阅读时长 = 正文字数 / 300 字每分钟。
  */
 import { useMemo, useState } from "react";
-import { notePath, noteText, setNoteTags, type NoteMeta } from "@lingrui/knowledge";
+import { notePath, setNoteTags, type NoteMeta } from "@lingrui/knowledge";
 import { ydoc } from "../collab/doc";
+import { useNoteText } from "../collab/useKnowledge";
 import { useDocumentActions } from "./actions";
 
 function readingMinutes(text: string): number {
@@ -28,18 +29,17 @@ export function DocHeader({ note }: { note: NoteMeta }) {
   const { exportDoc, exportVideo, recording, save, share, savedLabel } = useDocumentActions();
   const [adding, setAdding] = useState(false);
 
-  // note 变了就重算（正文字数可能变，但不必逐键重算 —— 用 updatedAt 做依赖）
+  // 正文用订阅拿（打字会实时更新字数），分组路径与日期看 note 元信息
+  const text = useNoteText(note);
   const meta = useMemo(() => {
     const path = notePath(ydoc, note.id).map((n) => n.title);
-    const text = noteText(ydoc, note);
     return {
       owner: path.length > 0 ? path.join(" / ") : "未分组",
       date: formatDate(note.updatedAt),
       minutes: readingMinutes(text),
       words: text.replace(/\s+/g, "").length,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只关心这篇笔记与它的更新时间
-  }, [note.id, note.updatedAt, note.parentId]);
+  }, [text, note.id, note.updatedAt, note.parentId]);
 
   const tags = note.tags ?? [];
   const addTag = (value: string) => {

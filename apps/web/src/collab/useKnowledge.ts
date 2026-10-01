@@ -13,6 +13,7 @@ import {
   getOrder,
   listChapters,
   listNotes,
+  noteText,
   type Annotation,
   type Chapter,
   type KnowledgeNode,
@@ -130,6 +131,30 @@ export function useKnowledgeNotes(): NoteMeta[] {
   }, []);
 
   return notes;
+}
+
+/**
+ * 订阅某篇笔记的正文纯文本。
+ *
+ * 主标题区的「阅读时长 / 字数」靠它 —— 否则 memo 只能依赖 note.updatedAt，
+ * 而打字并不会改 note 元信息，数字就会一直是陈旧的。
+ */
+export function useNoteText(note: NoteMeta | undefined): string {
+  const [text, setText] = useState(() => (note ? noteText(ydoc, note) : ""));
+
+  useEffect(() => {
+    if (!note || !note.fragment) {
+      setText("");
+      return;
+    }
+    const update = () => setText(noteText(ydoc, note));
+    update();
+    const fragment = ydoc.getXmlFragment(note.fragment);
+    fragment.observeDeep(update);
+    return () => fragment.unobserveDeep(update);
+  }, [note?.id, note?.fragment]);
+
+  return text;
 }
 
 /** 按 id 取单个节点（节点数量小，线性查找足够） */

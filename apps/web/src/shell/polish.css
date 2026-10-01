@@ -495,6 +495,60 @@ body {
   color: var(--text);
 }
 
+/* ---------- 14. 桌面端：窗口拖动 ---------- */
+/* titleBarStyle: hiddenInset 时没有原生标题栏，必须显式给可拖拽区域，否则整个窗口拖不动 */
+html[data-glass="desktop"] .topbar {
+  -webkit-app-region: drag;
+}
+html[data-glass="desktop"] .topbar button,
+html[data-glass="desktop"] .topbar input,
+html[data-glass="desktop"] .topbar kbd,
+html[data-glass="desktop"] .topbar .tb-search,
+html[data-glass="desktop"] .topbar .tb-avatar {
+  -webkit-app-region: no-drag;
+}
+
+/* ---------- 15. 可拖拽分栏 ---------- */
+/* 文档 | 细条 | 画布。宽度比例由 :root 上的 --doc-w 控制（Splitter 拖动写入） */
+.workspace {
+  grid-template-columns: var(--doc-w, 38%) 6px 1fr;
+}
+.splitter {
+  grid-row: 1;
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+  z-index: 3;
+}
+.splitter::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--border);
+  transition: background 0.12s, width 0.12s;
+}
+.splitter:hover::before,
+body.col-resizing .splitter::before {
+  width: 3px;
+  background: var(--accent);
+}
+body.col-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+.app.present .splitter {
+  display: none;
+}
+/* 细条占了一列，文档 pane 不再需要自己的右边框 */
+.pane.doc-pane {
+  border-right: none;
+}
+
 /* ---------- 12. toast ---------- */
 .lr-toast {
   background: rgba(24, 24, 34, 0.94);

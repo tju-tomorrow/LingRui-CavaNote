@@ -18,7 +18,7 @@
  *
  * 编辑策略：本地 draft 驱动输入框（光标不会跳），每次改动立刻写 Y.Doc（Yjs 很便宜）。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NODE_STYLE } from "@lingrui/canvas";
 import {
   markHuman,
@@ -31,7 +31,7 @@ import { useKnowledgeNode } from "../collab/useKnowledge";
 import { askLingRui } from "../chat/ask";
 import { noteFaqQuestion } from "../chat/faq";
 import { ydoc } from "../collab/doc";
-import { isReadOnlyShare } from "../shell/share";
+import { useReadOnlyShare } from "../shell/share";
 import { setFocus, useFocus } from "../state/focus";
 
 const ORIGIN_LABEL: Record<string, string> = {
@@ -73,16 +73,83 @@ export function NodeDetailCard() {
   const focus = useFocus();
   const node = useKnowledgeNode(focus ?? undefined);
   const mounted = useMount();
-  const readOnly = isReadOnlyShare();
+  const readOnly = useReadOnlyShare();
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [dirty, setDirty] = useState(false);
+  /** 最新草稿（防抖提交 + 切节点时刷盘要用） */
+  const draftRef = useRef<Draft | null>(null);
+  const nodeIdRef = useRef<string | undefined>(undefined);
 
-  // 只在「换了个节点」时重置草稿：否则 AI 更新会打断正在输入的内容
+  /**
+   * 写回 Y.Doc —— **只写真正变了的字段**。
+   *
+   * 早先是「每次按键整节点写回」：协同下很吵，而且会用手里那份旧快照
+   * 覆盖别人并发改的其它字段（KnowledgeNode 是整对象 LWW）。
+   */
+  const flush = (d: Draft, nodeId: string) => {
+    const fresh = readNode(ydoc, nodeId);
+    if (!fresh) return;
+
+    const next: Partial<Draft> = {};
+    if (d.title !== fresh.title) next.title = d.title;
+    if (d.summary !== (fresh.summary ?? "")) next.summary = d.summary;
+    if (JSON.stringify(d.roles) !== JSON.stringify(fresh.roles ?? [])) next.roles = d.roles;
+    if (JSON.stringify(d.faq) !== JSON.stringify(fresh.faq ?? [])) next.faq = d.faq;
+    if (JSON.stringify(d.tags) !== JSON.stringify(fresh.tags ?? [])) next.tags = d.tags;
+    const freshTech = Array.isArray(fresh.meta?.["tech"]) ? (fresh.meta["tech"] as string[]) : [];
+    if (JSON.stringify(d.tech) !== JSON.stringify(freshTech)) next.tech = d.tech;
+
+    if (Object.keys(next).length === 0) return;
+
+    const meta = { ...(fresh.meta ?? {}) };
+    if (next.tech) meta["tech"] = next.tech;
+
+    upsertNode(ydoc, {
+      ...fresh,
+      title: next.title ?? fresh.title,
+      summary: next.summary ?? fresh.summary,
+      roles: next.roles ?? fresh.roles,
+      faq: next.faq ?? fresh.faq,
+      tags: next.tags ?? fresh.tags,
+      meta,
+    });
+    // 人的编辑是权威的（ADR-0011 不变量 1）：标过之后 AI 想改就得走待确认
+    markHuman(ydoc, nodeId);
+  };
+
+  // 换节点：先把上一份草稿刷盘，再重置（不丢最后的输入）
   useEffect(() => {
-    setDraft(node ? toDraft(node) : null);
+    if (draftRef.current && nodeIdRef.current && dirty) {
+      flush(draftRef.current, nodeIdRef.current);
+    }
+    nodeIdRef.current = node?.id;
+    draftRef.current = node ? toDraft(node) : null;
+    setDraft(draftRef.current);
     setEditing(false);
+    setDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在换节点时跑
   }, [node?.id]);
+
+  // 非编辑态下跟随外部更新（AI 改了节点，卡片应该跟着变）
+  useEffect(() => {
+    if (editing || dirty || !node) return;
+    const next = toDraft(node);
+    draftRef.current = next;
+    setDraft(next);
+  }, [node, editing, dirty]);
+
+  // 防抖提交：停手 500ms 后写一次，而不是每个字符一次
+  useEffect(() => {
+    if (!dirty || !draft || !node) return;
+    const timer = window.setTimeout(() => {
+      flush(draft, node.id);
+      setDirty(false);
+    }, 500);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- flush 只依赖 draft/node
+  }, [draft, dirty, node?.id]);
 
   if (!node) return null;
 
@@ -91,28 +158,11 @@ export function NodeDetailCard() {
     NODE_STYLE.concept ?? { stroke: "#555555", background: "#f3f4f6", icon: "" };
   const d = draft ?? toDraft(node);
 
-  /** 写回 Y.Doc：只改传进来的字段，并标为人改过 */
-  const commit = (patch: Partial<Draft>) => {
-    const fresh = readNode(ydoc, node.id);
-    if (!fresh) return;
-    const meta = { ...(fresh.meta ?? {}) };
-    if (patch.tech) meta["tech"] = patch.tech;
-
-    upsertNode(ydoc, {
-      ...fresh,
-      title: patch.title ?? fresh.title,
-      summary: patch.summary ?? fresh.summary,
-      roles: patch.roles ?? fresh.roles,
-      faq: patch.faq ?? fresh.faq,
-      tags: patch.tags ?? fresh.tags,
-      meta,
-    });
-    markHuman(ydoc, node.id);
-  };
-
   const patch = (next: Partial<Draft>) => {
-    setDraft((prev) => (prev ? { ...prev, ...next } : prev));
-    commit(next);
+    const merged = { ...(draftRef.current ?? d), ...next };
+    draftRef.current = merged;
+    setDraft(merged);
+    setDirty(true);
   };
 
   const links =
@@ -318,16 +368,19 @@ export function NodeDetailCard() {
                     <>
                       <div className="nd-faq-row">
                         <span className="nd-faq-q">{item.q}</span>
-                        <button
-                          className="nd-faq-ask"
-                          type="button"
-                          onClick={() => {
-                            noteFaqQuestion(node.id, item.id, question);
-                            askLingRui(question);
-                          }}
-                        >
-                          {item.a ? "重问" : "问一下"}
-                        </button>
+                        {/* 只读视图不给「问一下」：那会触发 AI 写 Y.Doc */}
+                        {readOnly ? null : (
+                          <button
+                            className="nd-faq-ask"
+                            type="button"
+                            onClick={() => {
+                              noteFaqQuestion(node.id, item.id, question);
+                              askLingRui(question);
+                            }}
+                          >
+                            {item.a ? "重问" : "问一下"}
+                          </button>
+                        )}
                       </div>
                       {item.a ? <p className="nd-faq-a">{item.a}</p> : null}
                     </>

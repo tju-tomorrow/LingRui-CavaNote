@@ -37,10 +37,25 @@ export function upsertNote(doc: Y.Doc, note: NoteMeta): void {
   getNotes(doc).set(note.id, note);
 }
 
+/**
+ * 删笔记（连带清空它的正文 fragment）。
+ *
+ * 只摘 notes 元信息是不够的：Y.XmlFragment 是 Y.Doc 的**顶层 root**，
+ * 元信息没了它还在 —— 每个客户端和 Postgres 快照里都会永久留着那篇正文。
+ * 所以这里显式把内容删掉（Yjs 的删除是墓碑，仍然可被 undo 恢复）。
+ */
 export function removeNote(doc: Y.Doc, id: NoteId): boolean {
   const notes = getNotes(doc);
-  if (!notes.has(id)) return false;
-  notes.delete(id);
+  const note = notes.get(id);
+  if (!note) return false;
+
+  doc.transact(() => {
+    notes.delete(id);
+    if (note.fragment) {
+      const fragment = doc.getXmlFragment(note.fragment);
+      if (fragment.length > 0) fragment.delete(0, fragment.length);
+    }
+  });
   return true;
 }
 
@@ -176,6 +191,37 @@ export function setNoteTags(doc: Y.Doc, id: NoteId, tags: string[]): void {
   const note = readNote(doc, id);
   if (!note) return;
   getNotes(doc).set(id, { ...note, tags, updatedAt: Date.now() });
+}
+
+/**
+ * 对账 `node.blockIds`：把指向「已不存在的文档块」的引用清掉。
+ *
+ * 为什么要这一步：`blockIds` 是节点指向文档块的**反向引用**，但它只写不读，
+ * 于是删笔记 / 删卡片后没人清理 → 节点上永远挂着指向幽灵块的 id。
+ * 真相以文档 fragment 为准（卡片的 `nodeId` 才是权威方向），这里把它拉回来。
+ *
+ * @returns 被清理的节点数
+ */
+export function reconcileBlockIds(doc: Y.Doc, fragmentNames: string[]): number {
+  const alive = new Set<string>();
+  for (const name of fragmentNames) {
+    if (!name) continue;
+    const xml = doc.getXmlFragment(name).toString();
+    for (const match of xml.matchAll(/<blockcontainer id="([^"]+)"/g)) {
+      if (match[1]) alive.add(match[1]);
+    }
+  }
+
+  const nodes = doc.getMap<import("./schema").KnowledgeNode>("nodes");
+  let changed = 0;
+  for (const [id, node] of nodes) {
+    const current = node.blockIds ?? [];
+    const kept = current.filter((blockId) => alive.has(blockId));
+    if (kept.length === current.length) continue;
+    nodes.set(id, { ...node, blockIds: kept });
+    changed += 1;
+  }
+  return changed;
 }
 
 /** 递归删掉一篇笔记/分组及其子孙 */

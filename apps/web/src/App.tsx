@@ -24,7 +24,7 @@ import { setView as setShellView, useView } from "./state/view";
 import { useActiveNote, setActiveNote } from "./state/notes";
 import { useKnowledgeNotes } from "./collab/useKnowledge";
 import { useAuth } from "./auth/store";
-import { DEFAULT_NOTE_ID, reconnectCollab, seeded } from "./collab/doc";
+import { DEFAULT_NOTE_ID, isOpenableNote, reconnectCollab, seeded } from "./collab/doc";
 import { TopBar } from "./shell/TopBar";
 import { IconRail } from "./shell/IconRail";
 import { NoteTree } from "./shell/NoteTree";
@@ -36,7 +36,8 @@ import { DocHeader } from "./shell/DocHeader";
 import { CommandPalette } from "./shell/CommandPalette";
 import { NodeDetailCard } from "./canvas/NodeDetailCard";
 import { CanvasHint } from "./shell/CanvasHint";
-import { isReadOnlyShare } from "./shell/share";
+import { Splitter } from "./shell/Splitter";
+import { useReadOnlyShare } from "./shell/share";
 import "./shell/shell.css";
 
 export function App(): JSX.Element {
@@ -47,7 +48,7 @@ export function App(): JSX.Element {
   const view = useView();
   const [present, setPresent] = useState(false);
   const [palette, setPalette] = useState(false);
-  const [readOnly] = useState(() => isReadOnlyShare());
+  const readOnly = useReadOnlyShare();
 
   // 画布选中节点 → 文档滚到对应的知识卡片
   useEffect(() => {
@@ -59,17 +60,24 @@ export function App(): JSX.Element {
     reconnectCollab();
   }, [auth.token]);
 
-  // 笔记列表就绪后选中一篇（老数据认领为「默认笔记」）
+  // 笔记列表就绪后选中一篇（老数据认领为「默认笔记」）。
+  // 只考虑**真笔记**：分组没有正文，选它会把编辑器绑到空 fragment 上。
   useEffect(() => {
-    if (activeNoteId && notes.some((n) => n.id === activeNoteId)) return;
+    if (isOpenableNote(notes.find((n) => n.id === activeNoteId))) return;
     void seeded.then(() => {
-      const next = notes.find((n) => n.id === DEFAULT_NOTE_ID) ?? notes[0];
+      const next =
+        notes.find((n) => n.id === DEFAULT_NOTE_ID && isOpenableNote(n)) ??
+        notes.find(isOpenableNote);
       if (next) setActiveNote(next.id);
     });
   }, [notes, activeNoteId]);
 
   const activeNote =
-    notes.find((n) => n.id === activeNoteId) ?? notes.find((n) => n.id === DEFAULT_NOTE_ID) ?? notes[0];
+    (isOpenableNote(notes.find((n) => n.id === activeNoteId))
+      ? notes.find((n) => n.id === activeNoteId)
+      : undefined) ??
+    notes.find((n) => n.id === DEFAULT_NOTE_ID && isOpenableNote(n)) ??
+    notes.find(isOpenableNote);
 
   // ⌘K / Ctrl+K 打开命令面板；Esc 退出面板与演示
   useEffect(() => {
@@ -121,6 +129,8 @@ export function App(): JSX.Element {
           {/* key：换笔记必须重建编辑器（BlockNote 的 collaboration fragment 创建时绑定） */}
           {activeNote ? <NoteEditor key={activeNote.id} note={activeNote} /> : null}
         </section>
+
+        <Splitter />
 
         <section className="pane canvas">
           <CanvasStage />

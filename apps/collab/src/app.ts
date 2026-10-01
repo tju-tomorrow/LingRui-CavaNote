@@ -155,7 +155,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       res.end(JSON.stringify({ error: "bad local token" }));
       return;
     }
-    void handleChat(req, res);
+    // 开了账户体系就要求登录；桌面端内嵌（localToken）已在上一步校验过
+    void handleChat(req, res, { requireAuth: Boolean(users) && !localToken });
   });
 
   await server.listen();

@@ -14,7 +14,7 @@
  *   - 人在画布上的改动会写回 Knowledge 并标 provenance=human
  */
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { isReadOnlyShare } from "./shell/share";
+import { useReadOnlyShare } from "./shell/share";
 import {
   CaptureUpdateAction,
   Excalidraw,
@@ -121,9 +121,20 @@ export function CanvasStage() {
   const layout = useKnowledgeLayout();
   const annotations = useAnnotations();
   // 从 #share= 打开的只读分享视图（只影响交互，不影响数据）
-  const readOnly = isReadOnlyShare();
+  const readOnly = useReadOnlyShare();
 
   const [api, setApi] = useState<ExcalidrawAPI | null>(null);
+  // 跟随 <html data-theme>：让 Excalidraw 自身也切暗色（否则暗色下工具栏是死白）
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    document.documentElement.dataset["theme"] === "dark" ? "dark" : "light",
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setTheme(root.dataset["theme"] === "dark" ? "dark" : "light");
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
   const fittedRef = useRef(false);
   const draggingRef = useRef(false);
   const prevCountRef = useRef(0);
@@ -158,6 +169,10 @@ export function CanvasStage() {
     if (!api || !desired) return;
 
     const apply = () => {
+      // 用户正在编辑文字（双击节点改标签 / 新建文本）时不要覆盖场景：
+      // 与编辑态互相打架会丢字、甚至把画布打崩。等编辑结束后的 onChange 再落地。
+      const appState = api.getAppState();
+      if (appState.editingTextElement || appState.newElement) return;
       const current = api.getSceneElements();
       // Excalidraw 的元素联合类型与 DiffableElement 结构一致，只是字段可选性不同
       const { elements } = diffScene(
@@ -184,12 +199,36 @@ export function CanvasStage() {
     if (!fittedRef.current) {
       fittedRef.current = true;
       requestAnimationFrame(() => {
-        api.scrollToContent(undefined, { fitToContent: true, animate: false });
+        api.scrollToContent(api.getSceneElements(), { fitToContent: true, animate: false });
       });
     }
 
     return () => cancelAnimationFrame(raf);
   }, [api, desired]);
+
+  // 首屏自适应补救：
+  // 首次 fit 时常量尺寸还没算好 → 被压到最小缩放（0.1），之后不再修，
+  // 用户看到的就是“节点缩成一团”。等容器真正有尺寸后补一次 fit（只补一次）。
+  useEffect(() => {
+    if (!api || typeof ResizeObserver === "undefined") return;
+    const host = document.querySelector(".excalidraw-host");
+    if (!host) return;
+    const ro = new ResizeObserver(() => {
+      const rect = host.getBoundingClientRect();
+      if (rect.width < 120 || rect.height < 120) return;
+      // 只有在“被压到最小缩放”时才补救，不打扰用户手动缩放
+      if (api.getAppState().zoom.value > 0.11) {
+        ro.disconnect();
+        return;
+      }
+      requestAnimationFrame(() => {
+        api.scrollToContent(api.getSceneElements(), { fitToContent: true, animate: false });
+        ro.disconnect();
+      });
+    });
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [api]);
 
   // 节点变多（通常是 AI 生成的）时重新对焦，否则新节点会落在视野外，
   // 用户以为"AI 什么也没做"。
@@ -198,7 +237,7 @@ export function CanvasStage() {
     prevCountRef.current = nodes.length;
     if (!grew || !api) return;
     requestAnimationFrame(() => {
-      api.scrollToContent(undefined, { fitToContent: true, animate: true });
+      api.scrollToContent(api.getSceneElements(), { fitToContent: true, animate: true });
     });
   }, [nodes.length, api]);
 
@@ -206,6 +245,7 @@ export function CanvasStage() {
     <div className="excalidraw-host">
       <Excalidraw
         initialData={INITIAL_DATA}
+        theme={theme}
         // 只读分享视图：能看能平移缩放，但不能改（PRD/导出与分发.md §3）
         viewModeEnabled={readOnly}
         excalidrawAPI={(nextApi) => {

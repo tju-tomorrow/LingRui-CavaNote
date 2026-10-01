@@ -11,11 +11,18 @@
  */
 import { useSyncExternalStore } from "react";
 import * as Y from "yjs";
-import { getAnnotations, getLayout, getNodes, getOrder } from "@lingrui/knowledge";
+import { getAnnotations, getLayout, getNodes, getNotes, getOrder } from "@lingrui/knowledge";
 import { ydoc } from "../collab/doc";
 
+/**
+ * 撤销范围：知识节点 / 顺序 / 布局 / 注释 / **笔记树**。
+ *
+ * 为什么不含 BlockNote 的正文 fragment：它自带一套 yUndo，纳进来会双重撤销。
+ * 为什么要把 notes 加进来：新建笔记、删分组也是用户动作，应该能 ⌘Z 撤回 ——
+ * 否则同一套交互两套行为（改画布能撤、动笔记不能）。
+ */
 const undoManager = new Y.UndoManager(
-  [getNodes(ydoc), getOrder(ydoc), getLayout(ydoc), getAnnotations(ydoc)],
+  [getNodes(ydoc), getOrder(ydoc), getLayout(ydoc), getAnnotations(ydoc), getNotes(ydoc)],
   // 合并窗口内的连续小改动，避免一次拖动产生几十步
   { captureTimeout: 400 },
 );

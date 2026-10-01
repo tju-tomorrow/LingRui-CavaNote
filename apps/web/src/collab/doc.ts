@@ -84,9 +84,24 @@ export const seeded: Promise<void> = localPersistence.whenSynced.then(() => {
 /** 默认笔记 id（笔记树/编辑器都从它起步） */
 export const DEFAULT_NOTE_ID = "note-main";
 
-/** 某个笔记的正文 fragment */
+/** 能不能作为「当前笔记」打开（分组不行） */
+export function isOpenableNote(note: NoteMeta | undefined): boolean {
+  return Boolean(note) && !note!.isFolder && note!.fragment !== "";
+}
+
+/**
+ * 某个笔记的正文 fragment。
+ *
+ * 分组（文件夹）没有正文 —— `fragment` 是空串。这里必须拦下来：
+ * `ydoc.getXmlFragment("")` 会**创建一个名字为空的幽灵 fragment**，
+ * 编辑器绑上去之后往里写的东西全部无处安放（而且会同步给所有人）。
+ */
 export function blockFragment(note?: NoteMeta | null): Y.XmlFragment {
-  return ydoc.getXmlFragment(note?.fragment ?? BLOCK_FRAGMENT);
+  const name = note?.fragment;
+  if (note?.isFolder || name === "") {
+    throw new Error(`分组没有正文：${note?.title ?? "?"}`);
+  }
+  return ydoc.getXmlFragment(name ?? BLOCK_FRAGMENT);
 }
 
 // 开发期调试入口：控制台里 __lingrui.ydoc / __lingrui.seeded 可直接查

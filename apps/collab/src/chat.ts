@@ -13,6 +13,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { CANVAS_TOOLS, PET_TOOLS, SYSTEM_PROMPT } from "@lingrui/ai";
+import { verifyToken } from "./auth";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -98,7 +99,21 @@ function openAiTools() {
   }));
 }
 
-export async function handleChat(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export interface ChatOptions {
+  /**
+   * 服务端开了账户体系时，/api/chat 必须带登录 token。
+   *
+   * 不然就是「有账户但 LLM 代理敎着」：任何能访问服务端的人都能烧你的 token 额度。
+   * 桌面端内嵌服务用一次性 token（localToken），不走这条。
+   */
+  requireAuth?: boolean;
+}
+
+export async function handleChat(
+  req: IncomingMessage,
+  res: ServerResponse,
+  options: ChatOptions = {},
+): Promise<void> {
   cors(res);
 
   if (req.method === "OPTIONS") {
@@ -108,6 +123,24 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
   if (req.method !== "POST") {
     res.writeHead(405).end();
     return;
+  }
+
+  if (options.requireAuth) {
+    const header = req.headers.authorization ?? "";
+    const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+    try {
+      if (!token) throw new Error("missing token");
+      await verifyToken(token);
+    } catch {
+      res.writeHead(401, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: "需要登录",
+          hint: "未登录时前端会自动降级到本地讲解器",
+        }),
+      );
+      return;
+    }
   }
 
   const { baseUrl, model, apiKey, session } = llmConfig();

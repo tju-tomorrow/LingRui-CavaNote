@@ -45,10 +45,10 @@ export function ProjectsView() {
           className="view-primary"
           type="button"
           onClick={() => {
-            const folder = createFolder(ydoc, "新项目");
+            // 只建分组就够：**不能**把它设成当前笔记（分组没有正文）
+            createFolder(ydoc, "新项目");
             setTick((t) => t + 1);
             setView("notes");
-            setActiveNote(folder.id);
           }}
         >
           ＋ 新建项目
