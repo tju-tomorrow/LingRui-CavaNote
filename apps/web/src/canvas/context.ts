@@ -7,13 +7,21 @@
  * 两者共用同一个 version，避免漂移。
  */
 import { exportToBlob } from "@excalidraw/excalidraw";
-import { freezeContext, type FrozenContext } from "@lingrui/ai";
+import {
+  createScreenshotCache,
+  freezeContext,
+  sceneFingerprint,
+  type FrozenContext,
+} from "@lingrui/ai";
 import { ydoc } from "../collab/doc";
 import { getFocus } from "../state/focus";
 import { getCanvas } from "./bridge";
 
 /** 单调递增：保证「截图与数据同一时刻」 */
 let version = 0;
+
+/** 画布没变就不重复截（指纹见 packages/ai/src/screenshot-cache.ts） */
+const screenshotCache = createScreenshotCache();
 
 export function currentContextVersion(): number {
   return version;
@@ -36,8 +44,18 @@ async function captureScreenshot(): Promise<string | undefined> {
   const api = getCanvas();
   if (!api) return undefined;
 
+  const appState = api.getAppState();
+  const fingerprint = sceneFingerprint(api.getSceneElements(), {
+    scrollX: appState.scrollX,
+    scrollY: appState.scrollY,
+    zoom: appState.zoom.value,
+  });
+
+  // 画布没变就复用上一次的截图
+  const cached = screenshotCache.get(fingerprint);
+  if (cached) return cached;
+
   try {
-    const appState = api.getAppState();
     const blob = await exportToBlob({
       elements: api.getSceneElements(),
       appState: {
@@ -54,7 +72,9 @@ async function captureScreenshot(): Promise<string | undefined> {
       mimeType: "image/png",
       exportPadding: 16,
     });
-    return await blobToDataUrl(blob);
+    const screenshot = await blobToDataUrl(blob);
+    screenshotCache.set(fingerprint, screenshot);
+    return screenshot;
   } catch {
     return undefined;
   }
@@ -86,6 +106,7 @@ export async function freezeCanvasContext(): Promise<FrozenContext | null> {
     (window as unknown as Record<string, unknown>)["__contextPack"] = {
       version: frozen.version,
       screenshotBytes: frozen.screenshot?.length ?? 0,
+      captureCount: screenshotCache.captureCount(),
       nodes: frozen.snapshot.nodes.length,
       annotations: frozen.snapshot.annotations.length,
       chapters: frozen.snapshot.chapters.length,
