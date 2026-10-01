@@ -21,6 +21,7 @@
     "build:desktop": "bun run --filter @lingrui/desktop build",
     "smoke:desktop": "bun run --filter @lingrui/desktop smoke",
     "dist:desktop": "bun run --filter @lingrui/desktop dist",
+    "pack": "bash scripts/pack.sh",
     "build": "bun run --filter '*' build",
     "typecheck": "tsc --noEmit",
     "test": "bun test packages/ai packages/anim packages/canvas packages/knowledge packages/mascot packages/ui apps",

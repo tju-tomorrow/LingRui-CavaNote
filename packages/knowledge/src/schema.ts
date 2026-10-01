@@ -46,6 +46,13 @@ export interface CanvasBinding {
 
 export type NodeId = string;
 
+/** 注释 id（稳定、全局唯一，AI 按它引用） */
+export type AnnotationId = string;
+export type AnnotationType = "draw" | "sticky" | "text" | "highlight" | "arrow" | "shape";
+
+/** 章节 / 分镜 id */
+export type ChapterId = string;
+
 /**
  * 来源标记（ADR-0011）：谁改的这个元素。
  * - `origin`：AI 还是人
@@ -58,20 +65,40 @@ export interface Provenance {
   at?: number;
 }
 
+export interface FaqItem {
+  id: string;
+  /** 问题 */
+  q: string;
+  /** 答案；可空 = 点击时让 AI 现场回答 */
+  a?: string;
+}
+
 export interface KnowledgeNode {
   id: NodeId;
   kind: NodeKind;
   title: string;
   /** 一句话摘要，用于画布卡片 */
   summary?: string;
-  /** 文档视图里的块 id（BlockNote blockId） */
+  /** 文档视图里的块 id（BlockNote blockId）——兼容保留，见 blockIds */
   blockId?: string;
+  /** 一个节点可跨多个文档块 */
+  blockIds?: string[];
   /** 画布视图里的元素绑定 */
   canvas?: CanvasBinding;
   relations: Relation[];
   /** 来源标记 */
   provenance?: Provenance;
-  /** 自由元数据（技术栈、标签、外部链接…） */
+
+  // —— 知识模型 v1 新增（全部可选，旧数据零迁移）——
+  /** 详情卡的短要点（结构化，AI 可增量改） */
+  roles?: string[];
+  /** 「相关知识」问题，详情卡可点追问 */
+  faq?: FaqItem[];
+  tags?: string[];
+  /** 归属章节 / 分镜 */
+  chapterId?: ChapterId;
+
+  /** 自由元数据（icon / tech / links…） */
   meta?: Record<string, unknown>;
 }
 
@@ -90,6 +117,9 @@ export const ROOT_META = "meta";
 export const ROOT_NODES = "nodes";
 export const ROOT_ORDER = "order";
 export const ROOT_LAYOUT = "layout";
+export const ROOT_ANNOTATIONS = "annotations";
+export const ROOT_CHAPTERS = "chapters";
+export const ROOT_PROGRESS = "progress";
 
 /** 画布上的位置。属于“表现”，但存在同一个 Y.Doc 里以便持久化与协同。 */
 export interface NodePosition {

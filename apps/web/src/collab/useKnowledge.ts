@@ -4,7 +4,14 @@
  * 任何视图都不自己存节点，一律从这里读 —— 这是"一个 Knowledge，多个视图"的读取入口。
  */
 import { useEffect, useState } from "react";
-import { getLayout, getNodes, getOrder, type KnowledgeNode } from "@lingrui/knowledge";
+import {
+  getAnnotations,
+  getLayout,
+  getNodes,
+  getOrder,
+  type Annotation,
+  type KnowledgeNode,
+} from "@lingrui/knowledge";
 import { ydoc } from "./doc";
 import { layoutSnapshot } from "./layout";
 import type { NodeLayout } from "./seed";
@@ -52,6 +59,31 @@ export function useKnowledgeLayout(): NodeLayout {
   }, []);
 
   return layout;
+}
+
+/** 按 id 排序的注释列表（排序是为了让依赖它的 memo 稳定） */
+function listAnnotations(): Annotation[] {
+  return [...getAnnotations(ydoc).values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/**
+ * 订阅 Annotation（用户画的东西）。
+ *
+ * 这是「Annotation 是一等公民」在读取侧的体现：手绘/便签不再只是
+ * Excalidraw 内存里的 foreign element，而是进 Y.Doc、可持久化、可协同、可被 AI 引用。
+ */
+export function useAnnotations(): Annotation[] {
+  const [annotations, setAnnotations] = useState<Annotation[]>(() => listAnnotations());
+
+  useEffect(() => {
+    const update = () => setAnnotations(listAnnotations());
+    update();
+    const map = getAnnotations(ydoc);
+    map.observe(update);
+    return () => map.unobserve(update);
+  }, []);
+
+  return annotations;
 }
 
 /** 按 id 取单个节点（节点数量小，线性查找足够） */
