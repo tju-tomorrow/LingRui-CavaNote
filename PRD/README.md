@@ -1,4 +1,4 @@
-# PRD 索引 · LingRui Scribe
+# PRD 索引 · LingRui CavaNote
 
 > 主界面图：`PRD/主界面.png`
 

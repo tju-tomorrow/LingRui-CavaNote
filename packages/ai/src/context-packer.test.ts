@@ -6,7 +6,7 @@ import {
   upsertNode,
   type KnowledgeNode,
 } from "@lingrui/knowledge";
-import { freezeContext, snapshotToPrompt, toMultimodalContent } from "./context-packer";
+import { freezeContext, snapshotToPrompt } from "./context-packer";
 
 const viewport = { scrollX: 0, scrollY: 0, zoom: 1, width: 800, height: 600 };
 
@@ -94,28 +94,5 @@ describe("snapshotToPrompt", () => {
     const empty = createKnowledgeDoc({ id: "e", title: "空" });
     const out = snapshotToPrompt(freezeContext(empty, { version: 1, viewport }).snapshot);
     expect(out).toContain("节点（0）");
-  });
-});
-
-describe("toMultimodalContent", () => {
-  test("先数据后截图，并带上用户原话", () => {
-    const frozen = freezeContext(buildDoc(), {
-      version: 3,
-      viewport,
-      screenshot: "data:image/png;base64,BBBB",
-    });
-    const parts = toMultimodalContent(frozen, "把网关拆成两层");
-
-    expect(parts[0]).toEqual({ type: "text", text: "把网关拆成两层" });
-    expect(parts[1]?.type).toBe("text");
-    expect(parts[1] && "text" in parts[1] ? parts[1].text : "").toContain("id=gateway");
-    expect(parts[2]).toEqual({ type: "image_url", image_url: { url: "data:image/png;base64,BBBB" } });
-  });
-
-  test("没有截图时只发数据", () => {
-    const frozen = freezeContext(buildDoc(), { version: 1, viewport });
-    const parts = toMultimodalContent(frozen);
-    expect(parts).toHaveLength(1);
-    expect(parts[0]?.type).toBe("text");
   });
 });

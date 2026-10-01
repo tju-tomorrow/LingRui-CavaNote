@@ -1,13 +1,12 @@
 /**
  * 主标题区（PRD/主界面.md §2.5）
  *
- * 标题 / 元信息 / 导出 / 分享 / 保存。导出=Markdown，分享=复制只读链接，
- * 保存=打一个版本快照（显示最近保存时间）。
+ * 标题 / 元信息 / 导出（Markdown）/ 视频（WebM）/ 分享 / 保存（版本快照）。
  */
 import { useDocumentActions } from "./actions";
 
 export function DocHeader() {
-  const { exportDoc, save, share, savedLabel } = useDocumentActions();
+  const { exportDoc, exportVideo, recording, save, share, savedLabel } = useDocumentActions();
 
   return (
     <div className="doc-header">
@@ -21,6 +20,15 @@ export function DocHeader() {
         </button>
         <button className="dh-btn" type="button" onClick={() => void exportDoc()} title="导出 Markdown">
           导出
+        </button>
+        <button
+          className="dh-btn"
+          type="button"
+          onClick={() => void exportVideo()}
+          disabled={recording}
+          title="把演出录成 WebM 视频"
+        >
+          {recording ? "录制中…" : "视频"}
         </button>
         <button className="dh-btn" type="button" onClick={() => void share()} title="复制分享链接">
           分享

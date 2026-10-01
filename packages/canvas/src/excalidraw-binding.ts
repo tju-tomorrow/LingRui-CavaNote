@@ -28,6 +28,25 @@ export const NODE_STYLE: Record<string, { stroke: string; background: string; ic
   note: { stroke: "#475569", background: "#f8fafc", icon: "file" },
 };
 
+/**
+ * 语义图标（PRD/主界面.md §2.6「画布节点带语义图标」）。
+ *
+ * Excalidraw 没有图标图元，所以走标签文本：单元素、diffScene 无额外负担、
+ * 缩放不失真，也不用把图标做成图片资源。key 对应 NODE_STYLE 的 icon 字段。
+ */
+export const ICON_GLYPH: Record<string, string> = {
+  user: "👤",
+  gateway: "🚪",
+  server: "🧩",
+  redis: "⚡",
+  database: "🗄️",
+  queue: "📮",
+  registry: "🧭",
+  monitor: "📈",
+  bulb: "💡",
+  file: "📄",
+};
+
 /** Excalidraw skeleton：能被 convertToExcalidrawElements() 消费的松散结构 */
 export interface ElementSkeleton {
   type: string;
@@ -91,7 +110,8 @@ export function nodeToExcalidrawElement(
     roughness: 1.4, // 手绘
     roundness: { type: 3 },
     label: {
-      text: node.title,
+      // 图标 + 标题：一眼能分出网关/缓存/队列，而不只是颜色差异
+      text: `${ICON_GLYPH[style.icon] ?? "•"} ${node.title}`,
       fontSize: 18,
     },
     customData: { lingrui: true, nodeId: node.id, kind: node.kind } satisfies LingRuiCustomData,

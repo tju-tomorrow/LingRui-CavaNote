@@ -87,7 +87,7 @@ function createWindow(options: { show: boolean } = { show: true }): BrowserWindo
     minWidth: 960,
     minHeight: 640,
     backgroundColor: isDarwin ? "#00000000" : "#ffffff",
-    title: "LingRui Scribe",
+    title: "LingRui CavaNote",
     show: options.show,
     ...(isDarwin
       ? {

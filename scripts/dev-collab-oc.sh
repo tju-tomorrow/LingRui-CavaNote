@@ -27,7 +27,7 @@ fi
 export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://opencode.ai/zen/go/v1}"
 export OPENAI_API_KEY="$KEY"
 export LLM_MODEL="${1:-${LLM_MODEL:-deepseek-v4.1-flash}}"
-export LLM_SESSION="${LLM_SESSION:-lingrui-scribe}"
+export LLM_SESSION="${LLM_SESSION:-lingrui-cavanote}"
 
 echo "[dev-collab-oc] LLM = ${LLM_MODEL} @ ${OPENAI_BASE_URL} (session=${LLM_SESSION})"
 exec bun run --filter @lingrui/collab dev

@@ -682,10 +682,34 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .nd-faq li {
+  padding: 4px 0;
+}
+
+.nd-faq-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 0;
+}
+
+/* 已落盘的 FAQ 答案（来自 chat/faq 的回写） */
+.nd-faq-a {
+  margin: 4px 0 2px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--border);
+  background: #fafafa;
+  border-radius: 0 5px 5px 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+/* 只读分享视图 */
+.chat-readonly {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
 }
 
 .nd-faq-q {

@@ -1,5 +1,5 @@
 /**
- * LingRui Scribe — App Shell
+ * LingRui CavaNote — App Shell
  *
  * 布局对应 PRD/主界面.png：
  *   顶栏 | 左图标栏 | 侧栏（笔记树 + AI 助手）| 主区（标题 + 文档 + 画布 + 时间轴）

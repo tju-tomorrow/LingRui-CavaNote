@@ -32,6 +32,7 @@ import "@blocknote/shadcn/style.css";
 import { awareness, blockFragment } from "./collab/doc";
 import { registerEditor } from "./editor/bridge";
 import { schema } from "./editor/schema";
+import { isReadOnlyShare } from "./shell/share";
 
 const INITIAL_CONTENT = [
   { type: "heading" as const, props: { level: 1 as const }, content: "一次请求的完整旅程" },
@@ -113,7 +114,8 @@ export function NoteEditor() {
 
   return (
     <div className="editor-host">
-      <BlockNoteView editor={editor} theme="light" />
+      {/* 只读分享视图：文档可读不可改（PRD/导出与分发.md §3） */}
+      <BlockNoteView editor={editor} theme="light" editable={!isReadOnlyShare()} />
     </div>
   );
 }

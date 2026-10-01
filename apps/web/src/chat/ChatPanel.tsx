@@ -27,6 +27,8 @@ import { snapshotToPrompt, applyPending } from "@lingrui/ai";
 import { ydoc } from "../collab/doc";
 import { useUndoState, undoRound } from "../state/history";
 import { registerAsk } from "./ask";
+import { commitFaqAnswer } from "./faq";
+import { isReadOnlyShare } from "../shell/share";
 import {
   resolvePending,
   clearPending,
@@ -80,6 +82,8 @@ function createAdapter(): ChatModelAdapter {
           }
           if (accumulated.trim()) {
             remoteHealthy = true;
+            // 若这次提问来自详情卡的 FAQ，把答案落盘（PRD/知识模型.md §2.1）
+            commitFaqAnswer(question, accumulated);
             return;
           }
         } catch (error) {
@@ -109,6 +113,8 @@ function createAdapter(): ChatModelAdapter {
         accumulated += chunk;
         yield { content: [{ type: "text" as const, text: accumulated }] };
       }
+      // 本地讲解器路径也要落盘（否则不接 LLM 时 FAQ 答案永远存不下来）
+      commitFaqAnswer(question, accumulated);
     },
   };
 }
@@ -253,13 +259,19 @@ function Composer() {
 export function ChatPanel() {
   const adapter = useMemo(() => createAdapter(), []);
   const runtime = useLocalRuntime(adapter);
+  // 只读分享视图里不让人继续对 AI 下指令（那会写 Y.Doc）
+  const readOnly = isReadOnlyShare();
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <AskBridge />
       <Messages />
-      <PendingPatches />
-      <Composer />
+      {readOnly ? null : <PendingPatches />}
+      {readOnly ? (
+        <p className="chat-readonly">只读分享视图 · 无法提问或修改</p>
+      ) : (
+        <Composer />
+      )}
     </AssistantRuntimeProvider>
   );
 }

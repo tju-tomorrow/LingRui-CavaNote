@@ -14,6 +14,7 @@
  *   - 人在画布上的改动会写回 Knowledge 并标 provenance=human
  */
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { isReadOnlyShare } from "./shell/share";
 import {
   CaptureUpdateAction,
   Excalidraw,
@@ -119,6 +120,8 @@ export function CanvasStage() {
   const nodes = useKnowledgeNodes();
   const layout = useKnowledgeLayout();
   const annotations = useAnnotations();
+  // 从 #share= 打开的只读分享视图（只影响交互，不影响数据）
+  const readOnly = isReadOnlyShare();
 
   const [api, setApi] = useState<ExcalidrawAPI | null>(null);
   const fittedRef = useRef(false);
@@ -154,19 +157,29 @@ export function CanvasStage() {
   useEffect(() => {
     if (!api || !desired) return;
 
-    const current = api.getSceneElements();
-    // Excalidraw 的元素联合类型与 DiffableElement 结构一致，只是字段可选性不同
-    const { elements } = diffScene(
-      current as unknown as DiffableElement[],
-      desired as unknown as DiffableElement[],
-    );
+    const apply = () => {
+      const current = api.getSceneElements();
+      // Excalidraw 的元素联合类型与 DiffableElement 结构一致，只是字段可选性不同
+      const { elements } = diffScene(
+        current as unknown as DiffableElement[],
+        desired as unknown as DiffableElement[],
+      );
 
-    api.updateScene({
-      elements: elements as unknown as SceneElement[],
-      // Excalidraw 0.18 的 Store：不显式声明 captureUpdate 时改动会被下次 commit 覆盖
-      // （表现为"数据在、画面空"）。见 ADR-0009。
-      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-    });
+      api.updateScene({
+        elements: elements as unknown as SceneElement[],
+        // Excalidraw 0.18 的 Store：不显式声明 captureUpdate 时改动会被下次 commit 覆盖
+        // （表现为"数据在、画面空"）。见 ADR-0009。
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+    };
+
+    apply();
+
+    // 首次挂载时容器尺寸/Store 可能尚未就绪，这一提交会被静默丢弃；
+    // 而 `desired` 之后不再变化 → effect 不会重跑 → 画布就一直是空的
+    // （表现为"数据在、画面空"，刷新后必须手动改一下才显形）。
+    // 补一次下一帧的提交，保证首次打开就能看到内容。
+    const raf = requestAnimationFrame(apply);
 
     if (!fittedRef.current) {
       fittedRef.current = true;
@@ -174,6 +187,8 @@ export function CanvasStage() {
         api.scrollToContent(undefined, { fitToContent: true, animate: false });
       });
     }
+
+    return () => cancelAnimationFrame(raf);
   }, [api, desired]);
 
   // 节点变多（通常是 AI 生成的）时重新对焦，否则新节点会落在视野外，
@@ -191,6 +206,8 @@ export function CanvasStage() {
     <div className="excalidraw-host">
       <Excalidraw
         initialData={INITIAL_DATA}
+        // 只读分享视图：能看能平移缩放，但不能改（PRD/导出与分发.md §3）
+        viewModeEnabled={readOnly}
         excalidrawAPI={(nextApi) => {
           setApi(nextApi);
           // 聊天面板靠它截屏回灌上下文（ADR-0011 决策 4）

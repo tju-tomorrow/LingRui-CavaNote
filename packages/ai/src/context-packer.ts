@@ -99,26 +99,3 @@ export function snapshotToPrompt(snapshot: CanvasSnapshot): string {
 
   return lines.join("\n");
 }
-
-export type MultimodalPart =
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
-
-/**
- * 组装成 OpenAI 兼容的多模态 content。
- * 顺序刻意是「先数据后截图」：模型先拿到可寻址的 id 体系，再用截图对齐视觉意图。
- */
-export function toMultimodalContent(
-  frozen: FrozenContext,
-  userText?: string,
-): MultimodalPart[] {
-  const parts: MultimodalPart[] = [];
-
-  if (userText) parts.push({ type: "text", text: userText });
-  parts.push({ type: "text", text: snapshotToPrompt(frozen.snapshot) });
-  if (frozen.screenshot) {
-    parts.push({ type: "image_url", image_url: { url: frozen.screenshot } });
-  }
-
-  return parts;
-}

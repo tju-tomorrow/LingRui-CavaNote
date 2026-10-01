@@ -1,6 +1,6 @@
 # electron-builder 打包配置（见 PRD/桌面端.md §4）
-appId: pro.lingrui.scribe
-productName: LingRui Scribe
+appId: pro.lingrui.cavanote
+productName: LingRui CavaNote
 directories:
   output: release
   buildResources: build

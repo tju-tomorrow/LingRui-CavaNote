@@ -4,11 +4,11 @@
 
 </div>
 
-# LingRui Scribe
+# LingRui CavaNote
 
 > A note-taking app with a knowledge canvas that explains itself — co-create the canvas with AI, then watch it walk you through it, pause anytime, and click into any node to dig deeper.
 
-LingRui Scribe turns "explaining" into "performing": chat with AI to draw your knowledge onto a canvas that stays in sync with your notes. Hit play and the canvas performs the explanation along a timeline — pause, fast-forward, replay, or click any node to keep asking questions.
+LingRui CavaNote turns "explaining" into "performing": chat with AI to draw your knowledge onto a canvas that stays in sync with your notes. Hit play and the canvas performs the explanation along a timeline — pause, fast-forward, replay, or click any node to keep asking questions.
 
 ## ✨ Features
 

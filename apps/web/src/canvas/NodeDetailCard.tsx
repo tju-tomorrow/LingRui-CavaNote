@@ -17,6 +17,7 @@ import { NODE_STYLE } from "@lingrui/canvas";
 import type { KnowledgeNode } from "@lingrui/knowledge";
 import { useKnowledgeNode } from "../collab/useKnowledge";
 import { askLingRui } from "../chat/ask";
+import { noteFaqQuestion } from "../chat/faq";
 import { setFocus, useFocus } from "../state/focus";
 
 const ORIGIN_LABEL: Record<string, string> = {
@@ -105,18 +106,28 @@ export function NodeDetailCard() {
         <section className="nd-section">
           <h4>相关知识</h4>
           <ul className="nd-faq">
-            {faq.map((item) => (
-              <li key={item.id}>
-                <span className="nd-faq-q">{item.q}</span>
-                <button
-                  className="nd-faq-ask"
-                  type="button"
-                  onClick={() => askLingRui(`关于「${node.title}」：${item.q}`)}
-                >
-                  问一下
-                </button>
-              </li>
-            ))}
+            {faq.map((item) => {
+              const question = `关于「${node.title}」：${item.q}`;
+              return (
+                <li key={item.id}>
+                  <div className="nd-faq-row">
+                    <span className="nd-faq-q">{item.q}</span>
+                    <button
+                      className="nd-faq-ask"
+                      type="button"
+                      onClick={() => {
+                        // 登记后提问；答案回来时由 chat/faq 写回 item.a
+                        noteFaqQuestion(node.id, item.id, question);
+                        askLingRui(question);
+                      }}
+                    >
+                      {item.a ? "重问" : "问一下"}
+                    </button>
+                  </div>
+                  {item.a ? <p className="nd-faq-a">{item.a}</p> : null}
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
