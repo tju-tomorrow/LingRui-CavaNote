@@ -9,8 +9,8 @@
  *   ✅ 本地持久化 y-indexeddb（刷新不丢）
  *   ✅ 远端协同  HocuspocusProvider（VITE_COLLAB_URL 决定是否启用）
  *   ✅ AI 助手   assistant-ui runtime + 自定义 UI（本地确定性讲解器）
- *   ⬜ 时间轴    @lingrui/anim 的 sampleAt(script, t)
- *   ⬜ 吉祥物    VRM（需要 lingrui.vrm 资产）
+ *   ✓ 时间轴    @lingrui/anim 的 sampleAt(script, t) → apps/web/src/state/player.ts
+ *   ✓ 宠物      像素 Personal Pet（packages/mascot + apps/web/src/pet）
  */
 import type { JSX } from "react";
 import { useEffect } from "react";
@@ -20,6 +20,7 @@ import { ChatPanel } from "./chat/ChatPanel";
 import { useKnowledgeNodes } from "./collab/useKnowledge";
 import { revealNode } from "./editor/bridge";
 import { PetLayer } from "./pet/PetLayer";
+import { TimelineBar } from "./timeline/TimelineBar";
 import { useFocus } from "./state/focus";
 
 export function App(): JSX.Element {
@@ -72,17 +73,7 @@ export function App(): JSX.Element {
           <CanvasStage />
         </section>
 
-        <footer className="timeline">
-          {/* TODO(P2): @lingrui/anim 的 sampleAt(script, t) 驱动 */}
-          <span>▶</span>
-          <span>⏸</span>
-          <span>00:00 / 01:42</span>
-          <div className="track">
-            <i />
-          </div>
-          <span>1.0x</span>
-          <span>重播</span>
-        </footer>
+        <TimelineBar />
       </main>
 
       <PetLayer />

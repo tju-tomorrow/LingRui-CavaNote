@@ -136,3 +136,21 @@ describe("plan", () => {
     expect(p.reply).toBe("");
   });
 });
+
+describe("删除意图", () => {
+  test("「删掉 X」产出 deleteNode", () => {
+    const p = plan("删掉 Redis 缓存", { t: 0, nodes: NODES, occupied: RECTS });
+    expect(p.calls).toHaveLength(1);
+    expect(p.calls[0]).toMatchObject({ name: "deleteNode", input: { id: "redis" } });
+  });
+
+  test("按类型关键词也能定位（动词在后）", () => {
+    const p = plan("把缓存去掉", { t: 0, nodes: NODES, occupied: RECTS });
+    expect(p.calls[0]).toMatchObject({ name: "deleteNode", input: { id: "redis" } });
+  });
+
+  test("找不到目标时不产生调用", () => {
+    const p = plan("删掉不存在的东西", { t: 0, nodes: NODES, occupied: RECTS });
+    expect(p.calls.filter((c) => c.name === "deleteNode")).toEqual([]);
+  });
+});

@@ -404,3 +404,67 @@ html[data-glass="desktop"] .bn-container {
     -webkit-backdrop-filter: none;
   }
 }
+
+/* 三级保险：待确认改动（AI 想改人动过的内容） */
+.pending-panel {
+  flex: none;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid #f0c36d;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.pending-head {
+  font-size: 11px;
+  color: #8a5a00;
+  margin-bottom: 6px;
+}
+
+.pending-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.pending-risk {
+  flex: none;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #fde8c8;
+  color: #8a5a00;
+}
+
+.pending-risk-destructive {
+  background: #fde0e0;
+  color: #a02020;
+}
+
+.pending-reason {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-btn {
+  flex: none;
+  font-size: 11px;
+  border: 1px solid #e0c48a;
+  background: #fff;
+  border-radius: 5px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.pending-btn:hover {
+  background: #fdf3e0;
+}
+
+.pending-all {
+  margin-top: 6px;
+}

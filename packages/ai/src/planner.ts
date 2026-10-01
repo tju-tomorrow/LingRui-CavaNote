@@ -27,6 +27,11 @@ const CONNECT_PATTERN = /(?:连到|连接到|接到|接入到|指向|connect\s*t
 // 切分用：把前面的连词（并/和/与/，）一起吃掉，否则会残留在标题里
 const CONNECT_SPLIT = /(?:并|和|与|，|,|、)?\s*(?:连到|连接到|接到|接入到|指向|connect\s*to)/i;
 
+/** "删掉 X" / "去掉 X" */
+const DELETE_PATTERN = /(?:删掉|删除|去掉|移除|delete|remove)\s*[:：]?\s*(.+)/i;
+/** "把 X 去掉" / "将 X 删除"（动词在后） */
+const DELETE_PATTERN_SUFFIX = /(?:把|将)\s*(.+?)\s*(?:删掉|删除|去掉|移除)/i;
+
 /** 口语量词前缀 */
 const QUANTIFIER = /^(?:一个|一条|一台|一组|个|些)\s*/;
 
@@ -120,17 +125,19 @@ function clean(text: string): string {
     .trim();
 }
 
+/** 从文本里找出目标节点（先按标题，再按类型关键词） */
+function findTarget(text: string, nodes: KnowledgeNode[]): KnowledgeNode | undefined {
+  const byTitle = nodes.find((n) => text.includes(n.title) || n.title.includes(text));
+  if (byTitle) return byTitle;
+  const kind = inferKind(text);
+  return kind === "concept" ? undefined : nodes.find((n) => n.kind === kind);
+}
+
 /** 从"连到 Y"里解析出目标节点 */
 function findConnectTarget(text: string, nodes: KnowledgeNode[]): KnowledgeNode | undefined {
   const match = CONNECT_PATTERN.exec(text);
   const raw = match?.[1] ? clean(match[1]) : "";
-  if (!raw) return undefined;
-
-  const byTitle = nodes.find((n) => raw.includes(n.title) || n.title.includes(raw));
-  if (byTitle) return byTitle;
-
-  const kind = inferKind(raw);
-  return kind === "concept" ? undefined : nodes.find((n) => n.kind === kind);
+  return raw ? findTarget(raw, nodes) : undefined;
 }
 
 export function plan(message: string, ctx: PlanContext): Plan {
@@ -166,6 +173,15 @@ export function plan(message: string, ctx: PlanContext): Plan {
           ? `已在画布上生成「${title}」并接到「${connectTarget.title}」。`
           : `已在画布上生成节点「${title}」（类型：${kind}）。\n它现在还没有连到链路上——你可以说"把它连到后端服务"。`,
       };
+    }
+  }
+
+  // 1.5) "删掉 X" / "把 X 去掉" → deleteNode（目标若是人改过的，executor 会先挂起等确认）
+  const deleteMatch = DELETE_PATTERN.exec(text) ?? DELETE_PATTERN_SUFFIX.exec(text);
+  if (deleteMatch?.[1]) {
+    const target = findTarget(clean(deleteMatch[1]), ctx.nodes);
+    if (target) {
+      return { calls: [{ name: "deleteNode", input: { id: target.id } }], reply: "" };
     }
   }
 

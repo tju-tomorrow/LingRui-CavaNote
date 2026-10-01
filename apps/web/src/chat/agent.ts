@@ -14,6 +14,9 @@ import { ydoc } from "../collab/doc";
 import { layoutSnapshot } from "../collab/layout";
 import { NODE_SIZE } from "../collab/seed";
 import { getFocus, setFocus } from "../state/focus";
+import { beginRound } from "../state/history";
+import { pushPending } from "../state/pending";
+import { player } from "../state/player";
 import { buildReply } from "./explain";
 
 /** 时间轴游标：每次交互往后推进，动作流因此天然有序（P2 的时间轴会消费它） */
@@ -25,6 +28,12 @@ const timeline: Action[] = [];
 function applyToolResult(result: ToolResult): string {
   timeline.push(...result.actions);
   cursor += 1.5;
+
+  // 三级保险第二级：破坏人的元素时不直接应用，挂起等用户确认
+  if (!result.applied && result.pending) {
+    pushPending(result.pending.call, result.pending.reason, result.risk);
+    return `\n\n⏸ ${result.message}`;
+  }
   return result.ok ? `\n\n⚙ ${result.message}` : `\n\n（${result.message}）`;
 }
 
@@ -33,6 +42,8 @@ export function runToolCall(name: string, input: unknown): string {
   const call = toCanvasToolCall(name, input);
   if ("error" in call) return `\n\n（工具调用被忽略：${call.error}）`;
 
+  const startT = cursor;
+  beginRound();
   const result = executeTool({ doc: ydoc, t: cursor }, call);
   if (result.ok) {
     if (call.name === "focus") setFocus(call.input.nodeId);
@@ -41,7 +52,10 @@ export function runToolCall(name: string, input: unknown): string {
       lastSpawnedId = call.input.id;
     }
   }
-  return applyToolResult(result);
+  const message = applyToolResult(result);
+  // 本轮从 startT 起自动播放（让宠物真地演一遍）
+  if (result.ok) player.load(exportedTimeline(), "AI 演出", startT);
+  return message;
 }
 
 export interface AgentTurn {
@@ -67,12 +81,17 @@ export function runAgent(message: string): AgentTurn {
     nodeSize: NODE_SIZE,
   });
   const toolResults: ToolResult[] = [];
+  const startT = cursor;
+  const notes: string[] = [];
+
+  // 这一轮的写入归为一个 undo 批次
+  beginRound();
 
   for (const call of p.calls) {
     const result = executeTool({ doc: ydoc, t: cursor }, call);
     toolResults.push(result);
-    timeline.push(...result.actions);
-    cursor += 1.5;
+    // 复用 applyToolResult：内含时间轴累加 + 游标推进 + pending 挂起
+    notes.push(applyToolResult(result));
 
     if (result.ok) {
       if (call.name === "focus") setFocus(call.input.nodeId);
@@ -84,7 +103,11 @@ export function runAgent(message: string): AgentTurn {
   }
   cursor += 2;
 
-  const reply = p.reply || buildReply(message, getFocus());
+  // 本轮产生了动作 → 装载时间轴并从本轮起点自动播放
+  if (toolResults.some((r) => r.ok)) player.load(exportedTimeline(), "AI 演出", startT);
+
+  // 把工具做了什么（含"需要你确认"）回显给用户
+  const reply = (p.reply || buildReply(message, getFocus())) + notes.join("");
   return { reply, toolResults };
 }
 

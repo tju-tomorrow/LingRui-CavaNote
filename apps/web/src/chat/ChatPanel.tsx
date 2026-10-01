@@ -23,7 +23,15 @@ import { remoteEnabled, streamRemote, type ChatMessage } from "./remote";
 import { freezeCanvasContext } from "../canvas/context";
 import { insertKnowledgeCard } from "../editor/bridge";
 import { useFocus } from "../state/focus";
-import { snapshotToPrompt } from "@lingrui/ai";
+import { snapshotToPrompt, applyPending } from "@lingrui/ai";
+import { ydoc } from "../collab/doc";
+import { useUndoState, undoRound } from "../state/history";
+import {
+  resolvePending,
+  clearPending,
+  usePendingPatches,
+  type PendingPatch,
+} from "../state/pending";
 
 function createAdapter(): ChatModelAdapter {
   // 上一次远端是否可用。为 false 时不再截屏（截屏有成本），
@@ -104,6 +112,46 @@ function createAdapter(): ChatModelAdapter {
   };
 }
 
+function PendingPatches() {
+  const patches = usePendingPatches();
+  if (patches.length === 0) return null;
+
+  const accept = (patch: PendingPatch) => {
+    applyPending({ doc: ydoc, t: 0 }, patch.call);
+    resolvePending(patch.id);
+  };
+
+  const acceptAll = () => {
+    for (const patch of patches) applyPending({ doc: ydoc, t: 0 }, patch.call);
+    clearPending();
+  };
+
+  return (
+    <div className="pending-panel">
+      <div className="pending-head">
+        待确认改动（{patches.length}）· AI 想改你动过的内容
+      </div>
+      {patches.map((patch) => (
+        <div key={patch.id} className="pending-item">
+          <span className={`pending-risk pending-risk-${patch.risk}`}>{patch.risk}</span>
+          <span className="pending-reason">{patch.reason}</span>
+          <button type="button" className="pending-btn" onClick={() => accept(patch)}>
+            接受
+          </button>
+          <button type="button" className="pending-btn" onClick={() => resolvePending(patch.id)}>
+            忽略
+          </button>
+        </div>
+      ))}
+      {patches.length > 1 ? (
+        <button type="button" className="pending-btn pending-all" onClick={acceptAll}>
+          全部接受
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function Messages() {
   const messages = useAuiState((s) => s.thread.messages);
   const focus = useFocus();
@@ -147,6 +195,7 @@ function Composer() {
   const aui = useAui();
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const [text, setText] = useState("");
+  const undo = useUndoState();
 
   const send = () => {
     const value = text.trim();
@@ -169,6 +218,15 @@ function Composer() {
         placeholder="向 LingRui 询问关于这个知识点…"
         onChange={(e) => setText(e.target.value)}
       />
+      <button
+        className="chat-send"
+        type="button"
+        disabled={!undo.canUndo}
+        title="撤销本轮 AI 改动（跨文档与画布）"
+        onClick={() => undoRound()}
+      >
+        ↶
+      </button>
       <button className="chat-send" type="submit" disabled={isRunning || !text.trim()}>
         ➤
       </button>
@@ -183,6 +241,7 @@ export function ChatPanel() {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <Messages />
+      <PendingPatches />
       <Composer />
     </AssistantRuntimeProvider>
   );

@@ -1,8 +1,9 @@
 /**
  * Personal Pet 覆盖层（见 PRD/宠物.md）
  *
- * 自包含：不依赖 CanvasStage / 时间轴。挂载时确保有一只是当前宠物（默认灵睿），
- * 用 rAF 驱动像素宠物；画布聚焦某节点时，宠物指向并讲解。
+ * 两种驱动：
+ *   1. 有演出（时间轴已装载）→ 由 `state/player` 驱动：状态 / 旁白 / 位移
+ *   2. 无演出 → 画布聚焦节点时，指向并讲解
  *
  * 只读 `collab/doc` 的 ydoc，不改动它。
  */
@@ -11,6 +12,7 @@ import { createPixelPet, type PixelPetController } from "@lingrui/mascot";
 import { ensureDefaultPet, getActivePet, getPets, type PetSpec } from "@lingrui/knowledge";
 import { ydoc } from "../collab/doc";
 import { useFocus } from "../state/focus";
+import { getPlayerState, subscribePlayer } from "../state/player";
 
 /** 订阅当前激活宠物（Y.Doc pet root） */
 function useActivePet(): PetSpec | undefined {
@@ -32,9 +34,12 @@ export function PetLayer(): JSX.Element | null {
   const pet = useActivePet();
   const focus = useFocus();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<PixelPetController | null>(null);
+  const narrationRef = useRef<string | null>(null);
+  const [narration, setNarration] = useState<string | null>(null);
 
-  // 建立控制器 + rAF 驱动（组件 unmount / 换宠时重建）
+  // 建立控制器 + rAF 渲染（组件 unmount / 换宠时重建）
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !pet) return;
@@ -59,10 +64,34 @@ export function PetLayer(): JSX.Element | null {
     };
   }, [pet]);
 
-  // 聚焦知识节点 → 宠物指向并讲解
+  // 演出驱动：状态 / 旁白 / 位移（命令式订阅，逐帧不触发 React 重渲染）
+  useEffect(() => {
+    return subscribePlayer(() => {
+      const s = getPlayerState();
+      const controller = controllerRef.current;
+      if (!controller || !s.snapshot) return;
+
+      controller.setState(s.snapshot.pet.state);
+
+      const text = s.snapshot.narration?.text ?? null;
+      if (text !== narrationRef.current) {
+        narrationRef.current = text;
+        setNarration(text);
+      }
+
+      // 画布坐标 → 屏幕水平位移（近似：节点 x 落在 0~1020 区间）
+      const wrap = wrapRef.current;
+      if (wrap) {
+        const nx = Math.max(0, Math.min(1, s.snapshot.pet.at[0] / 1020));
+        wrap.style.transform = `translateX(${-nx * 420}px)`;
+      }
+    });
+  }, []);
+
+  // 无演出时：聚焦知识节点 → 宠物指向并讲解
   useEffect(() => {
     const controller = controllerRef.current;
-    if (!controller || !focus) return;
+    if (!controller || !focus || getPlayerState().script) return;
     controller.setState("point");
     const timer = setTimeout(() => controller.setState("explain"), 1200);
     return () => clearTimeout(timer);
@@ -70,8 +99,11 @@ export function PetLayer(): JSX.Element | null {
 
   if (!pet || pet.form !== "pixel") return null;
 
+  const bubble = narration ?? (focus ? "我来讲解这条链路 →" : null);
+
   return (
     <div
+      ref={wrapRef}
       className="pet-layer"
       style={{
         position: "fixed",
@@ -84,20 +116,24 @@ export function PetLayer(): JSX.Element | null {
         gap: 6,
         pointerEvents: "none",
         userSelect: "none",
+        transition: "transform 180ms linear",
       }}
     >
-      {focus ? (
+      {bubble ? (
         <div
           style={{
             background: "#1e1e1e",
             color: "#fff",
             fontSize: 12,
-            padding: "4px 8px",
-            borderRadius: 999,
-            whiteSpace: "nowrap",
+            lineHeight: 1.5,
+            padding: "5px 9px",
+            borderRadius: 10,
+            maxWidth: 240,
+            textAlign: "center",
+            whiteSpace: "pre-wrap",
           }}
         >
-          我来讲解这条链路 →
+          {bubble}
         </div>
       ) : null}
       <canvas ref={canvasRef} />

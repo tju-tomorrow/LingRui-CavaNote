@@ -6,7 +6,7 @@
  *
  * 由本模块自己的 rAF 推进 t；渲染层**不**各自起循环。
  */
-import { sampleAt, type Action, type SceneScript, type SceneState } from "@lingrui/anim";
+import { sampleAt, type Action, type SceneScript, type SceneState, type Shot } from "@lingrui/anim";
 import { useSyncExternalStore } from "react";
 
 export interface PlayerState {
@@ -16,6 +16,8 @@ export interface PlayerState {
   playing: boolean;
   rate: number;
   snapshot: SceneState | null;
+  /** 分镜（缩略图） */
+  chapters: Shot[];
 }
 
 export const RATES = [0.5, 1, 1.5, 2] as const;
@@ -27,6 +29,7 @@ let state: PlayerState = {
   playing: false,
   rate: 1,
   snapshot: null,
+  chapters: [],
 };
 
 const listeners = new Set<() => void>();
@@ -76,10 +79,10 @@ function start(): void {
 
 export const player = {
   /** 装载动作流；给了 autoplayFrom 就自动从该时刻播放（AI 每轮生成后调用） */
-  load(actions: Action[], title?: string, autoplayFrom?: number): void {
+  load(actions: Action[], title?: string, autoplayFrom?: number, chapters: Shot[] = []): void {
     if (actions.length === 0) return;
     const script = buildScript(actions, title);
-    state = withT(script, autoplayFrom ?? 0);
+    state = { ...withT(script, autoplayFrom ?? 0), chapters };
     emit();
     if (autoplayFrom !== undefined) player.play();
   },
@@ -128,7 +131,7 @@ export const player = {
     player.setRate(next);
   },
   clear(): void {
-    state = { script: null, t: 0, duration: 0, playing: false, rate: state.rate, snapshot: null };
+    state = { script: null, t: 0, duration: 0, playing: false, rate: state.rate, snapshot: null, chapters: [] };
     emit();
   },
 };
