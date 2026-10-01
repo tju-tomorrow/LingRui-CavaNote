@@ -53,8 +53,10 @@ export const SEED_NODES: KnowledgeNode[] = [
 /** 画布上节点的统一尺寸（表现层） */
 export const NODE_SIZE = { width: 250, height: 96 } as const;
 
-/** 画布布局（位置属于"表现"，不属于 Knowledge） */
-export const LAYOUT: Record<string, { x: number; y: number }> = {
+export type NodeLayout = Record<string, { x: number; y: number }>;
+
+/** 默认布局：拖动后的位置会覆盖到这里（存在 Y.Doc 的 layout map） */
+export const DEFAULT_LAYOUT: NodeLayout = {
   user: { x: 0, y: 0 },
   gateway: { x: 320, y: 0 },
   service: { x: 680, y: 0 },

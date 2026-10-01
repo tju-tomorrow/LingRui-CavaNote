@@ -165,6 +165,69 @@ body,
   cursor: default;
 }
 
+.chat-insert {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--accent);
+  background: #fff;
+  border: 1px solid #d7d9f0;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.chat-insert:hover {
+  background: #eef0ff;
+}
+
+/* 文档里的知识卡片：块只存 nodeId，内容实时从 Knowledge 读 */
+.knowledge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.knowledge-card:hover {
+  background: #eef0ff;
+}
+
+.knowledge-card .kc-kind {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.knowledge-card .kc-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.knowledge-card .kc-summary {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.knowledge-card-flash {
+  animation: kc-flash 1.2s ease;
+}
+
+@keyframes kc-flash {
+  0%,
+  100% {
+    background: var(--panel);
+  }
+  30% {
+    background: #dfe3ff;
+  }
+}
+
 /* 工作区：文档视图 | 画布视图，共享同一份 Knowledge */
 .workspace {
   grid-area: main;

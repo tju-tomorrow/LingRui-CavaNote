@@ -75,6 +75,34 @@ export interface KnowledgeDocMeta {
 export const ROOT_META = "meta";
 export const ROOT_NODES = "nodes";
 export const ROOT_ORDER = "order";
+export const ROOT_LAYOUT = "layout";
+
+/** 画布上的位置。属于“表现”，但存在同一个 Y.Doc 里以便持久化与协同。 */
+export interface NodePosition {
+  x: number;
+  y: number;
+}
+
+export function getLayout(doc: Y.Doc): Y.Map<NodePosition> {
+  return doc.getMap<NodePosition>(ROOT_LAYOUT);
+}
+
+/** 只在位置真的变了才写，避免 onChange 与场景重建互相触发 */
+export function setLayoutPosition(
+  doc: Y.Doc,
+  id: NodeId,
+  x: number,
+  y: number,
+  epsilon = 1,
+): boolean {
+  const layout = getLayout(doc);
+  const current = layout.get(id);
+  if (current && Math.abs(current.x - x) < epsilon && Math.abs(current.y - y) < epsilon) {
+    return false;
+  }
+  layout.set(id, { x, y });
+  return true;
+}
 
 export function createKnowledgeDoc(meta: Pick<KnowledgeDocMeta, "id" | "title">): Y.Doc {
   const doc = new Y.Doc({ guid: meta.id });

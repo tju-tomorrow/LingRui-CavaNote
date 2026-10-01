@@ -5,11 +5,11 @@
  * 而且会再拉一套 Radix。这里只用 assistant-ui 的 runtime（流式、取消、消息仓库），
  * UI 走我们自己的设计语言。
  *
- * TODO(P3)：把 ChatModelAdapter 换成真实 LLM
- *   - 有 VITE_COLLAB_URL 时走 `/api/chat`（AI SDK streamText）
- *   - 用 @lingrui/ai 的 CANVAS_TOOLS 做 tool calling，让模型直接 spawnNode / connect
+ * 模型来源（见 chat/remote.ts）：
+ *   1. 优先 /api/chat（apps/collab 代理任何 OpenAI 兼容后端）
+ *   2. 不可用时静默降级到本地 planner —— 两条路径共用同一套画布工具
  */
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AssistantRuntimeProvider,
   useAui,
@@ -17,36 +17,63 @@ import {
   useLocalRuntime,
   type ChatModelAdapter,
 } from "@assistant-ui/react";
-import { buildReply } from "./explain";
+import { runAgent, runToolCall } from "./agent";
+import { chunks, sleep, textOf } from "./text";
+import { remoteEnabled, streamRemote, type ChatMessage } from "./remote";
+import { insertKnowledgeCard } from "../editor/bridge";
 import { useFocus } from "../state/focus";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** 按 2~4 个字切块，模拟流式输出 */
-function* chunks(text: string): Generator<string> {
-  let i = 0;
-  while (i < text.length) {
-    const size = Math.min(2 + Math.floor(Math.random() * 3), text.length - i);
-    yield text.slice(i, i + size);
-    i += size;
-  }
-}
-
-function createAdapter(getNodeId: () => string | null): ChatModelAdapter {
+function createAdapter(): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }) {
-      const last = messages.at(-1);
       const question =
-        last?.content
-          .filter((p): p is { type: "text"; text: string } => p.type === "text")
-          .map((p) => p.text)
-          .join("") ?? "";
+        [...messages].reverse().find((m) => m.role === "user")
+          ? textOf([...messages].reverse().find((m) => m.role === "user")!)
+          : "";
 
-      const reply = buildReply(question, getNodeId());
+      const payload: ChatMessage[] = messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role as "user" | "assistant", content: textOf(m) }))
+        .filter((m) => m.content.length > 0);
 
-      // 注意：assistant-ui 的 local runtime 对每次 yield 是「覆盖」而非「追加」
+      // ---- 路径 1：真实 LLM ----
+      if (remoteEnabled) {
+        let accumulated = "";
+        let started = false;
+        try {
+          for await (const event of streamRemote(payload, abortSignal)) {
+            if (event.type === "text") {
+              started = true;
+              accumulated += event.delta;
+              yield { content: [{ type: "text" as const, text: accumulated }] };
+            } else if (event.type === "tool") {
+              started = true;
+              accumulated += runToolCall(event.name, event.arguments);
+              yield { content: [{ type: "text" as const, text: accumulated }] };
+            } else if (event.type === "error") {
+              throw new Error(event.message);
+            }
+          }
+          if (accumulated.trim()) return;
+        } catch (error) {
+          if (started) {
+            // 已经输出过内容，不再拼接本地回复，避免两段话打架
+            yield {
+              content: [
+                { type: "text" as const, text: `${accumulated}\n\n（模型中断：${String(error)}）` },
+              ],
+            };
+            return;
+          }
+          // 还没输出任何东西 → 静默降级
+        }
+      }
+
+      // ---- 路径 2：本地 planner ----
+      // assistant-ui 的 local runtime 对每次 yield 是「覆盖」而非「追加」
       // （内部是 [...initialContent, ...m.content]，initialContent 只在 run 开始时取一次）。
-      // 所以每块必须带上**到目前为止的全文**，否则只会看到最后一块。
+      // 所以每块必须带上截至目前的全文字。
+      const reply = runAgent(question).reply;
       let accumulated = "";
       for (const chunk of chunks(reply)) {
         if (abortSignal.aborted) return;
@@ -60,6 +87,7 @@ function createAdapter(getNodeId: () => string | null): ChatModelAdapter {
 
 function Messages() {
   const messages = useAuiState((s) => s.thread.messages);
+  const focus = useFocus();
 
   if (messages.length === 0) {
     return (
@@ -74,14 +102,21 @@ function Messages() {
   return (
     <div className="chat-messages">
       {messages.map((m) => {
-        const text = m.content
-          .filter((p): p is { type: "text"; text: string } => p.type === "text")
-          .map((p) => p.text)
-          .join("");
+        const text = textOf(m);
         if (!text) return null;
         return (
           <div key={m.id} className={`chat-msg chat-msg-${m.role}`}>
             {text}
+            {/* 知识落盘：把当前聚焦的节点写进文档 */}
+            {m.role === "assistant" && focus ? (
+              <button
+                className="chat-insert"
+                type="button"
+                onClick={() => insertKnowledgeCard(focus)}
+              >
+                ＋ 插入到笔记
+              </button>
+            ) : null}
           </div>
         );
       })}
@@ -123,10 +158,7 @@ function Composer() {
 }
 
 export function ChatPanel() {
-  const focusRef = useRef<string | null>(null);
-  focusRef.current = useFocus();
-
-  const adapter = useMemo(() => createAdapter(() => focusRef.current), []);
+  const adapter = useMemo(() => createAdapter(), []);
   const runtime = useLocalRuntime(adapter);
 
   return (

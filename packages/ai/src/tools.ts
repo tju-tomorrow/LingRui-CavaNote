@@ -5,55 +5,57 @@
  *   1. 解释：用户点节点 → 取 KnowledgeNode + 邻居 → 生成解释文本
  *   2. 演出：把解释编译成 SceneScript（见 @lingrui/anim）
  *
- * 这些 tool 定义同时服务于：
+ * 工具定义同时服务于：
  *   - 前端 AI SDK 的 tool calling
- *   - 未来的 canvas MCP server（让外部 agent 也能画）
+ *   - 本地 planner（无 LLM 时的降级路径）
+ *   - 未来的 canvas MCP server
+ *
+ * 实际执行在 executor.ts —— 那里是唯一能改 Y.Doc 的地方。
  */
-import type { NodeKind, RelationKind } from "@lingrui/knowledge";
+import type { NodeKind } from "@lingrui/knowledge";
+import type { CanvasToolCall } from "./executor";
 
-export interface SpawnNodeInput {
-  id: string;
-  kind: NodeKind;
-  title: string;
-  summary?: string;
-  at: [number, number];
-}
-
-export interface ConnectInput {
-  from: string;
-  to: string;
-  kind: RelationKind;
-  label?: string;
-}
-
-/**
- * Tool 规格（与 Vercel AI SDK 的 tool() 形状对齐，这里只描述参数 schema）。
- * 真正注册时用 zod 生成 parameters。
- */
+/** 工具描述表：给 LLM 看的能力清单 */
 export const CANVAS_TOOLS = {
   spawnNode: {
     description: "在画布上生成一个基建实体节点，并写入 Knowledge 层",
-    input: {} as SpawnNodeInput,
+    when: "当讲解需要引入新实体时",
   },
   connect: {
     description: "在两个节点之间建立带语义的关系（calls/reads/writes/publishes…）",
-    input: {} as ConnectInput,
+    when: "当要说明谁调用谁、谁读写谁时",
   },
   flow: {
     description: "播放一段从 A 到 B 的数据流动画",
-    input: {} as { from: string; to: string; label?: string; at: number },
+    when: "当要演示一次请求/一条消息的走向时",
   },
   focus: {
     description: "把镜头和吉祥物聚焦到某个节点",
-    input: {} as { nodeId: string },
+    when: "当要强调某个实体时",
   },
   narrate: {
     description: "让吉祥物在某个时间点说一句话",
-    input: {} as { at: number; text: string; nodeId?: string },
+    when: "当需要旁白时",
   },
 } as const;
 
 export type CanvasToolName = keyof typeof CANVAS_TOOLS;
+
+export const TOOL_NAMES = Object.keys(CANVAS_TOOLS) as CanvasToolName[];
+
+/** 把 LLM 返回的 tool 调用转成内部可执行的形状（含最小校验） */
+export function toCanvasToolCall(
+  name: string,
+  input: unknown,
+): CanvasToolCall | { error: string } {
+  if (!TOOL_NAMES.includes(name as CanvasToolName)) {
+    return { error: `未知工具：${name}` };
+  }
+  if (typeof input !== "object" || input === null) {
+    return { error: `${name} 的入参必须是对象` };
+  }
+  return { name: name as CanvasToolName, input } as CanvasToolCall;
+}
 
 export const SYSTEM_PROMPT = `你是 LingRui Scribe 的基建讲解 Agent。
 

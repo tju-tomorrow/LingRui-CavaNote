@@ -13,16 +13,23 @@
  *   ⬜ 吉祥物    VRM（需要 lingrui.vrm 资产）
  */
 import type { JSX } from "react";
+import { useEffect } from "react";
 import { NoteEditor } from "./NoteEditor";
 import { CanvasStage } from "./CanvasStage";
 import { ChatPanel } from "./chat/ChatPanel";
 import { useKnowledgeNodes } from "./collab/useKnowledge";
+import { revealNode } from "./editor/bridge";
 import { useFocus } from "./state/focus";
 
 export function App(): JSX.Element {
   const focus = useFocus();
   const nodes = useKnowledgeNodes();
   const focusedTitle = focus ? nodes.find((n) => n.id === focus)?.title : undefined;
+
+  // 两个视图同步：画布上选中节点 → 文档滚到对应的知识卡片
+  useEffect(() => {
+    if (focus) revealNode(focus);
+  }, [focus]);
 
   return (
     <div className="app">

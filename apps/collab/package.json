@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/server.ts",
-    "start": "bun src/server.ts"
+    "build": "bun build src/server.ts --target=node --outfile=dist/server.js",
+    "dev": "bun run build && node --watch dist/server.js",
+    "start": "bun run build && node dist/server.js"
   },
   "dependencies": {
     "@hocuspocus/extension-database": "^4.7.0",
     "@hocuspocus/extension-redis": "^4.7.0",
     "@hocuspocus/server": "^4.7.0",
+    "@lingrui/ai": "workspace:*",
     "ioredis": "^6.0.0",
     "jose": "^6.2.12",
     "pg": "^8.23.1",

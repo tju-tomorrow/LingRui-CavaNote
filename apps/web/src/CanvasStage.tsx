@@ -2,40 +2,63 @@
  * 画布视图
  *
  * 演示本产品的核心命题：**同一份 KnowledgeNode，文档视图和画布视图共享**。
- * 节点来自 Y.Doc（collab/useKnowledge），位置属于"表现"（collab/seed 的 LAYOUT）。
+ * 节点来自 Y.Doc（collab/useKnowledge），位置属于"表现"（存在 Y.Doc 的 layout map 里）。
  *
  * 边界（ADR-0003）：Excalidraw 只是渲染器。元素的 customData.nodeId 回指 Knowledge，
  * 正文永远不在这里。
- *
- * 同步策略（见 ADR-0009）：场景内容由节点集合派生，节点集合变化时**整体重建**。
- * 为什么不用 updateScene 增量同步：Excalidraw 的命令式 API 实例在 React 重渲染 /
- * HMR 下会被替换，增量写入容易打到一个已脱离渲染的 scene 上（表现为"数据在、画面空"）。
  */
-import { useMemo } from "react";
-import { Excalidraw, convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import {
+  CaptureUpdateAction,
+  Excalidraw,
+  convertToExcalidrawElements,
+} from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import type { KnowledgeNode } from "@lingrui/knowledge";
 import {
+  isLingRuiElement,
   nodeIdOf,
   nodeToExcalidrawElement,
   relationToArrow,
   type ElementSkeleton,
 } from "@lingrui/canvas";
-import { useKnowledgeNodes } from "./collab/useKnowledge";
-import { LAYOUT, NODE_SIZE } from "./collab/seed";
+import { useKnowledgeNodes, useKnowledgeLayout } from "./collab/useKnowledge";
+import { NODE_SIZE, type NodeLayout } from "./collab/seed";
+import { setNodePosition } from "./collab/layout";
 import { setFocus } from "./state/focus";
 
-function rectOf(nodeId: string): { x: number; y: number; width: number; height: number } {
-  const at = LAYOUT[nodeId] ?? { x: 0, y: 0 };
+type ExcalidrawProps = ComponentProps<typeof Excalidraw>;
+type ExcalidrawAPI = NonNullable<Parameters<NonNullable<ExcalidrawProps["excalidrawAPI"]>>[0]>;
+type SceneElement = ReturnType<ExcalidrawAPI["getSceneElements"]>[number];
+
+/** 场景指纹：Knowledge 内容或布局变了就要重画 */
+function fingerprint(nodes: KnowledgeNode[], layout: NodeLayout): string {
+  return nodes
+    .map((n) => {
+      const at = layout[n.id];
+      return [
+        n.id,
+        n.kind,
+        n.title,
+        at ? `${at.x},${at.y}` : "",
+        n.relations.map((r) => `${r.to}~${r.kind}~${r.label ?? ""}`).join(","),
+      ].join(":");
+    })
+    .sort()
+    .join("|");
+}
+
+function rectOf(nodeId: string, layout: NodeLayout) {
+  const at = layout[nodeId] ?? { x: 0, y: 0 };
   return { x: at.x, y: at.y, width: NODE_SIZE.width, height: NODE_SIZE.height };
 }
 
-function buildSkeletons(nodes: KnowledgeNode[]): ElementSkeleton[] {
+function buildSkeletons(nodes: KnowledgeNode[], layout: NodeLayout): ElementSkeleton[] {
   const known = new Set(nodes.map((n) => n.id));
   const out: ElementSkeleton[] = [];
 
   for (const node of nodes) {
-    out.push(nodeToExcalidrawElement(node, { ...rectOf(node.id) }));
+    out.push(nodeToExcalidrawElement(node, rectOf(node.id, layout)));
   }
 
   for (const node of nodes) {
@@ -44,8 +67,8 @@ function buildSkeletons(nodes: KnowledgeNode[]): ElementSkeleton[] {
       if (!known.has(rel.to)) continue;
       out.push(
         relationToArrow(
-          { elementId: `el-${node.id}`, rect: rectOf(node.id) },
-          { elementId: `el-${rel.to}`, rect: rectOf(rel.to) },
+          { elementId: `el-${node.id}`, rect: rectOf(node.id, layout) },
+          { elementId: `el-${rel.to}`, rect: rectOf(rel.to, layout) },
           rel.label,
         ),
       );
@@ -55,58 +78,87 @@ function buildSkeletons(nodes: KnowledgeNode[]): ElementSkeleton[] {
   return out;
 }
 
+const INITIAL_DATA = {
+  elements: [],
+  appState: { viewBackgroundColor: "transparent" },
+};
+
 export function CanvasStage() {
   const nodes = useKnowledgeNodes();
+  const layout = useKnowledgeLayout();
 
-  // 节点集合 + 内容的指纹：Knowledge 变了就重建场景
-  const sceneKey = nodes
-    .map(
-      (n) =>
-        `${n.id}:${n.kind}:${n.title}:${n.relations
-          .map((r) => `${r.to}~${r.kind}~${r.label ?? ""}`)
-          .join(",")}`,
-    )
-    .sort()
-    .join("|");
+  // 用 state 而不是 ref：StrictMode 下 excalidrawAPI 回调可能晚于 effect 执行，
+  // 用 ref 会拿到已卸载的旧实例，updateScene 打到一个看不见的 scene 上。
+  const [api, setApi] = useState<ExcalidrawAPI | null>(null);
+  const fittedRef = useRef(false);
+  const draggingRef = useRef(false);
 
-  const initialData = useMemo(() => {
+  const converted = useMemo(() => {
     if (nodes.length === 0) return null;
-    return {
-      elements: convertToExcalidrawElements(
-        buildSkeletons(nodes) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
-      ),
-      appState: { viewBackgroundColor: "transparent" },
-      scrollToContent: true,
-    };
-    // 故意只依赖 sceneKey：节点内容变化时重建，而不是增量 patch
+    const raw = convertToExcalidrawElements(
+      buildSkeletons(nodes, layout) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
+    );
+    // 关键：convertToExcalidrawElements 会额外生成标签文本元素，它们**不会**继承
+    // 我们写在 skeleton 上的 customData。不把它们也标成自己的，就会被当成
+    // "用户手绘"，每次重建都累积一层。
+    return raw.map((el) => ({
+      ...el,
+      customData: { ...(el.customData as object | undefined), lingrui: true },
+    }));
+    // 故意用指纹而不是 nodes/layout 对象：避免同内容不同引用导致重画
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sceneKey]);
+  }, [fingerprint(nodes, layout)]);
 
-  if (!initialData) {
-    return <div className="excalidraw-host" />;
-  }
+  useEffect(() => {
+    if (!api || !converted) return;
+
+    // 只替换"我们自己的"元素，用户手绘的内容原样保留
+    const foreign = api
+      .getSceneElements()
+      .filter((el: SceneElement) => !isLingRuiElement(el));
+
+    api.updateScene({
+      elements: [...converted, ...foreign],
+      // Excalidraw 0.18 引入了 Store：不显式声明 captureUpdate 时，
+      // 场景改动会被下次 commit 覆盖回去（表现为"数据在、画面空"）。见 ADR-0009。
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+
+    if (!fittedRef.current) {
+      fittedRef.current = true;
+      requestAnimationFrame(() => {
+        api.scrollToContent(undefined, { fitToContent: true, animate: false });
+      });
+    }
+  }, [api, converted]);
 
   return (
     <div className="excalidraw-host">
       <Excalidraw
-        key={sceneKey}
-        initialData={initialData}
-        excalidrawAPI={(api) => {
+        initialData={INITIAL_DATA}
+        excalidrawAPI={(nextApi) => {
+          setApi(nextApi);
           if (import.meta.env.DEV) {
-            // 开发期调试通道：控制台里 __canvasApi.getSceneElements() 可直接查场景
-            (window as unknown as Record<string, unknown>)["__canvasApi"] = api;
+            // 开发期调试通道：__canvasApi.getSceneElements() 可直接查场景
+            (window as unknown as Record<string, unknown>)["__canvasApi"] = nextApi;
           }
-          // initialData.scrollToContent 在容器尺寸刚就绪时算不准，挂载后手动对一次视野
-          requestAnimationFrame(() => {
-            api.scrollToContent(undefined, { fitToContent: true, animate: false });
-          });
         }}
         onChange={(elements, appState) => {
+          // 只在拖动结束时把位置写回 Knowledge 层，避免 onChange 与场景重建互相触发
+          const dragging = appState.selectedElementsAreBeingDragged;
+          if (draggingRef.current && !dragging) {
+            for (const el of elements) {
+              const nodeId = nodeIdOf(el);
+              if (nodeId) setNodePosition(nodeId, el.x, el.y);
+            }
+          }
+          draggingRef.current = dragging;
+
           const picked = Object.entries(appState.selectedElementIds ?? {}).find(([, v]) => v);
           if (!picked) return;
-          const el = elements.find((e) => e.id === picked[0]);
-          const nodeId = el ? nodeIdOf(el) : undefined;
-          if (nodeId) setFocus(nodeId);
+          const selected = elements.find((e) => e.id === picked[0]);
+          const focused = selected ? nodeIdOf(selected) : undefined;
+          if (focused) setFocus(focused);
         }}
       />
     </div>

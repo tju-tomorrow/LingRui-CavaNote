@@ -16,6 +16,7 @@
         "@hocuspocus/extension-database": "^4.7.0",
         "@hocuspocus/extension-redis": "^4.7.0",
         "@hocuspocus/server": "^4.7.0",
+        "@lingrui/ai": "workspace:*",
         "ioredis": "^6.0.0",
         "jose": "^6.2.12",
         "pg": "^8.23.1",
@@ -64,6 +65,9 @@
       "dependencies": {
         "@lingrui/anim": "workspace:*",
         "@lingrui/knowledge": "workspace:*",
+      },
+      "peerDependencies": {
+        "yjs": "^13.6.33",
       },
     },
     "packages/anim": {

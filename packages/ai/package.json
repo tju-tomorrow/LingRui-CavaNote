@@ -10,5 +10,8 @@
   "dependencies": {
     "@lingrui/knowledge": "workspace:*",
     "@lingrui/anim": "workspace:*"
+  },
+  "peerDependencies": {
+    "yjs": "^13.6.33"
   }
 }
