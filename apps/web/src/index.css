@@ -704,6 +704,110 @@ html[data-glass="desktop"] .bn-container {
   white-space: pre-wrap;
 }
 
+/* 登录 / 注册弹层 */
+.lr-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lr-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 18, 30, 0.35);
+}
+
+.lr-modal-card {
+  position: relative;
+  width: 320px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lr-modal-card h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.lr-modal-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.lr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.lr-field input {
+  font: inherit;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.lr-field input:focus {
+  border-color: var(--accent, #5b5bd6);
+}
+
+.lr-modal-error {
+  margin: 0;
+  font-size: 12px;
+  color: #c92a2a;
+}
+
+.lr-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.lr-btn-primary {
+  border: none;
+  background: var(--accent, #5b5bd6);
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.lr-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.lr-btn-ghost {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.lr-btn-ghost:hover {
+  color: var(--accent, #5b5bd6);
+}
+
 /* 详情卡的编辑模式 */
 .node-detail.is-editing {
   width: 340px;

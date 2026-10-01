@@ -4,7 +4,9 @@
  * 主题切换、▷演示、⌘K 搜索可用；导出/分享为 P4 占位（禁用）。
  */
 import { useEffect, useState } from "react";
+import { logout, useAuth } from "../auth/store";
 import { useDocumentActions } from "./actions";
+import { LoginDialog } from "./LoginDialog";
 
 type Theme = "light" | "dark";
 const THEME_KEY = "lingrui-theme";
@@ -24,7 +26,9 @@ export function TopBar({
   present: boolean;
 }) {
   const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [accountOpen, setAccountOpen] = useState(false);
   const { exportDoc, share } = useDocumentActions();
+  const auth = useAuth();
 
   useEffect(() => {
     document.documentElement.dataset["theme"] = theme;
@@ -71,9 +75,16 @@ export function TopBar({
         ↗
       </button>
 
-      <span className="tb-avatar" title="账户">
-        陈
-      </span>
+      <button
+        className="tb-avatar"
+        type="button"
+        title={auth.user ? `${auth.user.name}（${auth.user.email}）· 点击退出` : "登录 / 注册"}
+        onClick={() => (auth.user ? logout() : setAccountOpen(true))}
+      >
+        {auth.user ? auth.user.name.slice(0, 1) : "登"}
+      </button>
+
+      {accountOpen ? <LoginDialog onClose={() => setAccountOpen(false)} /> : null}
     </header>
   );
 }

@@ -20,12 +20,15 @@ import { revealNode } from "./editor/bridge";
 import { PetLayer } from "./pet/PetLayer";
 import { TimelineBar } from "./timeline/TimelineBar";
 import { useFocus } from "./state/focus";
+import { useAuth } from "./auth/store";
+import { reconnectCollab } from "./collab/doc";
 import { TopBar } from "./shell/TopBar";
 import { IconRail, type ShellView } from "./shell/IconRail";
 import { NoteTree } from "./shell/NoteTree";
 import { DocHeader } from "./shell/DocHeader";
 import { CommandPalette } from "./shell/CommandPalette";
 import { NodeDetailCard } from "./canvas/NodeDetailCard";
+import { CanvasHint } from "./shell/CanvasHint";
 import { isReadOnlyShare } from "./shell/share";
 import "./shell/shell.css";
 
@@ -38,6 +41,7 @@ const PLACEHOLDER: Record<Exclude<ShellView, "notes">, string> = {
 
 export function App(): JSX.Element {
   const focus = useFocus();
+  const auth = useAuth();
   const [view, setView] = useState<ShellView>("notes");
   const [present, setPresent] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -47,6 +51,11 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (focus) revealNode(focus);
   }, [focus]);
+
+  // 登录 / 登出后带新 token 重新握手（不重建 provider，本地 Y.Doc 不动）
+  useEffect(() => {
+    reconnectCollab();
+  }, [auth.token]);
 
   // ⌘K / Ctrl+K 打开命令面板；Esc 退出面板与演示
   useEffect(() => {
@@ -95,6 +104,7 @@ export function App(): JSX.Element {
 
         <section className="pane canvas">
           <CanvasStage />
+          <CanvasHint />
           {/* 三级保险：把待确认的破坏类补丁在画布上就地标出来 */}
           <GhostOverlay />
           <NodeDetailCard />

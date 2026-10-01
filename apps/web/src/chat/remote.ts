@@ -3,6 +3,7 @@
  *
  * 与服务端 apps/collab/src/chat.ts 的 NDJSON 协议一一对应。
  */
+import { authToken } from "../auth/store";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -45,7 +46,9 @@ export async function* streamRemote(
     method: "POST",
     headers: {
       "content-type": "application/json",
+      // 桌面端内嵌服务用一次性 token；web 端登录后带上登录 token
       ...(bridge?.token ? { "x-lingrui-token": bridge.token } : {}),
+      ...(authToken() ? { authorization: `Bearer ${authToken()}` } : {}),
     },
     body: JSON.stringify({ messages, ...extras }),
     signal,

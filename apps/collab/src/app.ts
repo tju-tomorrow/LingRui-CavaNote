@@ -16,8 +16,10 @@ import { Database } from "@hocuspocus/extension-database";
 import { Redis } from "@hocuspocus/extension-redis";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { canAccess, verifyToken } from "./auth";
+import { handleAuth, isAuthRequest } from "./auth-routes";
 import { handleChat, isChatRequest } from "./chat";
 import { createPersistence, type Persistence } from "./persistence";
+import { createUserStore, migrateUsers, type UserStore } from "./users";
 
 export interface StartServerOptions {
   /** 0 = 让系统分配随机端口（桌面端用这个） */
@@ -62,11 +64,15 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
 
   // ---- Postgres：失败不致命 ----
   let persistence: Persistence | null = null;
+  // 账户体系（可选）：有数据库才有 /api/auth/*；没有也能跑，只是不能登录
+  let users: UserStore | null = null;
   if (databaseUrl) {
     const candidate = createPersistence(databaseUrl);
     try {
       await candidate.migrate();
       persistence = candidate;
+      await migrateUsers(databaseUrl);
+      users = createUserStore(databaseUrl);
     } catch (error) {
       await candidate.close().catch(() => undefined);
       warn(
@@ -129,6 +135,17 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     | undefined;
   httpServer.removeAllListeners("request");
   httpServer.on("request", (req: IncomingMessage, res: ServerResponse) => {
+    // 账户接口（没数据库时明确告知不可用，而不是落到 Hocuspocus 的欢迎页）
+    if (isAuthRequest(req)) {
+      if (!users) {
+        res.writeHead(503, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "服务端没连数据库，账户体系不可用" }));
+        return;
+      }
+      void handleAuth(req, res, users);
+      return;
+    }
+
     if (!isChatRequest(req)) {
       hocuspocusHandler?.(req, res);
       return;
@@ -147,7 +164,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const actualPort = typeof address === "object" && address ? address.port : port;
   const displayHost = host ?? "127.0.0.1";
 
-  log(`[collab] ws://${displayHost}:${actualPort}  (persistence: ${persistence ? "postgres" : "off"})`);
+  log(
+    `[collab] ws://${displayHost}:${actualPort}  (persistence: ${persistence ? "postgres" : "off"}${users ? ", accounts: on" : ""})`,
+  );
   log(
     process.env.OPENAI_API_KEY
       ? `[collab] /api/chat 已就绪（${process.env.LLM_MODEL ?? "gpt-4o-mini"} @ ${process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1"}）`
@@ -162,6 +181,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     async stop() {
       await server.destroy();
       await persistence?.close().catch(() => undefined);
+      await users?.close().catch(() => undefined);
     },
   };
 }

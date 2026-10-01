@@ -11,6 +11,7 @@ import * as Y from "yjs";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { createKnowledgeDoc, getNodes, upsertNode } from "@lingrui/knowledge";
+import { authToken } from "../auth/store";
 import { SEED_NODES } from "./seed";
 
 export const DOC_ID = "lingrui-demo";
@@ -24,16 +25,28 @@ export const localPersistence = new IndexeddbPersistence(DOC_ID, ydoc);
 /** 远端协同：桌面端用内嵌服务，web 版看 VITE_COLLAB_URL */
 const bridge = typeof window === "undefined" ? undefined : window.lingrui;
 const COLLAB_URL = bridge?.collabUrl ?? (import.meta.env.VITE_COLLAB_URL as string | undefined);
-const COLLAB_TOKEN = bridge?.token ?? (import.meta.env.VITE_COLLAB_TOKEN as string | undefined);
+/** 未登录时的回退 token（开发用：scripts/dev-token.mjs 铸的） */
+const FALLBACK_TOKEN = bridge?.token ?? (import.meta.env.VITE_COLLAB_TOKEN as string | undefined);
+
+/**
+ * token 在**连接时**才取：登录 / 登出后调 `remoteProvider.connect()` 重新握手，
+ * 于是身份切换不需要重建整个 provider（也就不会把本地 Y.Doc 换掉）。
+ */
+const currentToken = (): string => authToken() ?? FALLBACK_TOKEN ?? "";
 
 export const remoteProvider: HocuspocusProvider | null = COLLAB_URL
   ? new HocuspocusProvider({
       url: COLLAB_URL,
       name: DOC_ID,
       document: ydoc,
-      token: () => COLLAB_TOKEN ?? "",
+      token: currentToken,
     })
   : null;
+
+/** 登录态变化后重新连接（带新 token） */
+export function reconnectCollab(): void {
+  remoteProvider?.connect();
+}
 
 export const awareness = remoteProvider?.awareness ?? null;
 

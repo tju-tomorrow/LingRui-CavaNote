@@ -6,19 +6,28 @@
  * - 数据存在 Y.Doc 的 per-user `progress` 桶里
  */
 import { useEffect, useState } from "react";
-import { getProgressRoot, listProgress, readProgress, setProgress, type NodeProgress } from "@lingrui/knowledge";
+import {
+  getProgressRoot,
+  listProgress,
+  LOCAL_USER,
+  readProgress,
+  setProgress,
+  type NodeProgress,
+} from "@lingrui/knowledge";
+import { useAuth } from "../auth/store";
 import { ydoc } from "../collab/doc";
 import { useKnowledgeNodes } from "../collab/useKnowledge";
 import { usePlayer } from "../state/player";
 
-function useProgress(): Record<string, NodeProgress> {
-  const [progress, setLocal] = useState(() => listProgress(ydoc));
+function useProgress(userId: string): Record<string, NodeProgress> {
+  const [progress, setLocal] = useState(() => listProgress(ydoc, userId));
   useEffect(() => {
     const root = getProgressRoot(ydoc);
-    const update = () => setLocal(listProgress(ydoc));
+    const update = () => setLocal(listProgress(ydoc, userId));
+    update();
     root.observe(update);
     return () => root.unobserve(update);
-  }, []);
+  }, [userId]);
   return progress;
 }
 
@@ -26,19 +35,24 @@ const MARK: Record<string, string> = { done: "✓", learning: "◐", todo: "○"
 
 export function ProgressPanel() {
   const nodes = useKnowledgeNodes();
-  const progress = useProgress();
+  const auth = useAuth();
+  // 进度是「每个人自己的」（PRD/知识模型.md §2.5）：登录后用真实 userId 分桶，未登录落到 local
+  const userId = auth.user?.id ?? LOCAL_USER;
+  const progress = useProgress(userId);
   const { snapshot } = usePlayer();
   const focus = snapshot?.focus ?? null;
 
   // 时间轴推进到某节点 → 自动标 learning（done 不覆盖）
   useEffect(() => {
     if (!focus) return;
-    if (readProgress(ydoc, focus)?.state !== "done") setProgress(ydoc, focus, "learning");
-  }, [focus]);
+    if (readProgress(ydoc, focus, userId)?.state !== "done") {
+      setProgress(ydoc, focus, "learning", userId);
+    }
+  }, [focus, userId]);
 
   const toggle = (id: string) => {
-    const cur = readProgress(ydoc, id)?.state ?? "todo";
-    setProgress(ydoc, id, cur === "done" ? "todo" : "done");
+    const cur = readProgress(ydoc, id, userId)?.state ?? "todo";
+    setProgress(ydoc, id, cur === "done" ? "todo" : "done", userId);
   };
 
   return (
