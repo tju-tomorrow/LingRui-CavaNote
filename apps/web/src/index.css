@@ -541,3 +541,35 @@ html[data-glass="desktop"] .bn-container {
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
+
+/* 孤儿卡片：节点已删，但卡片还留在文档里 */
+.knowledge-card-orphan {
+  border-left-color: #b0b0b0;
+  background: #fafafa;
+  cursor: default;
+}
+
+.knowledge-card-orphan .kc-kind {
+  color: var(--muted);
+}
+
+.knowledge-card-orphan .kc-title {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.kc-remove {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 5px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.kc-remove:hover {
+  background: #f3f4f6;
+}

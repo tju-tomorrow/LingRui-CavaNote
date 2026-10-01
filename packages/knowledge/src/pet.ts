@@ -98,7 +98,7 @@ export function getPets(doc: Y.Doc): Y.Map<PetSpec> {
   return doc.getMap<PetSpec>(ROOT_PETS);
 }
 
-function getActiveMap(doc: Y.Doc): Y.Map<{ id: PetId }> {
+export function getActivePetMap(doc: Y.Doc): Y.Map<{ id: PetId }> {
   return doc.getMap<{ id: PetId }>(ROOT_ACTIVE_PET);
 }
 
@@ -113,7 +113,7 @@ export function readPet(doc: Y.Doc, id: PetId): PetSpec | undefined {
 export function upsertPet(doc: Y.Doc, spec: PetSpec): void {
   doc.transact(() => {
     getPets(doc).set(spec.id, spec);
-    if (!getActiveMap(doc).get("current")) getActiveMap(doc).set("current", { id: spec.id });
+    if (!getActivePetMap(doc).get("current")) getActivePetMap(doc).set("current", { id: spec.id });
   });
 }
 
@@ -122,19 +122,19 @@ export function removePet(doc: Y.Doc, id: PetId): void {
     getPets(doc).delete(id);
     if (getActivePetId(doc) === id) {
       const next = listPets(doc)[0];
-      if (next) getActiveMap(doc).set("current", { id: next.id });
-      else getActiveMap(doc).delete("current");
+      if (next) getActivePetMap(doc).set("current", { id: next.id });
+      else getActivePetMap(doc).delete("current");
     }
   });
 }
 
 export function getActivePetId(doc: Y.Doc): PetId | null {
-  return getActiveMap(doc).get("current")?.id ?? null;
+  return getActivePetMap(doc).get("current")?.id ?? null;
 }
 
 export function setActivePet(doc: Y.Doc, id: PetId): boolean {
   if (!readPet(doc, id)) return false;
-  getActiveMap(doc).set("current", { id });
+  getActivePetMap(doc).set("current", { id });
   return true;
 }
 

@@ -7,6 +7,7 @@
  */
 import { createReactBlockSpec } from "@blocknote/react";
 import { useKnowledgeNode } from "../collab/useKnowledge";
+import { removeKnowledgeCard } from "./bridge";
 import { setFocus } from "../state/focus";
 
 const KIND_LABEL: Record<string, string> = {
@@ -35,6 +36,23 @@ export const knowledgeCard = createReactBlockSpec(
       const nodeId = block.props.nodeId;
       const node = useKnowledgeNode(nodeId);
 
+      // 节点被删后卡片会变孤儿（我们的 undo 不管文档 fragment，见 ADR-0011）
+      if (!node) {
+        return (
+          <div className="knowledge-card knowledge-card-orphan" contentEditable={false}>
+            <span className="kc-kind">已失效</span>
+            <span className="kc-title">节点已删除（{nodeId || "未指定"}）</span>
+            <button
+              type="button"
+              className="kc-remove"
+              onClick={() => removeKnowledgeCard(nodeId)}
+            >
+              移除卡片
+            </button>
+          </div>
+        );
+      }
+
       return (
         <div
           className="knowledge-card"
@@ -46,9 +64,9 @@ export const knowledgeCard = createReactBlockSpec(
             if (e.key === "Enter" || e.key === " ") setFocus(nodeId);
           }}
         >
-          <span className="kc-kind">{KIND_LABEL[node?.kind ?? ""] ?? "知识"}</span>
-          <span className="kc-title">{node?.title ?? `未知节点 (${nodeId})`}</span>
-          {node?.summary ? <span className="kc-summary">{node.summary}</span> : null}
+          <span className="kc-kind">{KIND_LABEL[node.kind] ?? "知识"}</span>
+          <span className="kc-title">{node.title}</span>
+          {node.summary ? <span className="kc-summary">{node.summary}</span> : null}
         </div>
       );
     },

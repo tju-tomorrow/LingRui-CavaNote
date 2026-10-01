@@ -7,12 +7,22 @@
  *
  * 两条路径共用同一个 executor，所以"AI 自己画节点"的能力不依赖模型是否存在。
  */
-import { executeTool, plan, toCanvasToolCall, type ToolResult } from "@lingrui/ai";
-import { getNodes } from "@lingrui/knowledge";
+import {
+  executePetTool,
+  executeTool,
+  plan,
+  planPet,
+  toCanvasToolCall,
+  toPetToolCall,
+  type PetToolCall,
+  type ToolResult,
+} from "@lingrui/ai";
+import { getNodes, listPets, readNode, upsertNode } from "@lingrui/knowledge";
 import { deriveShots, type Action } from "@lingrui/anim";
 import { ydoc } from "../collab/doc";
 import { layoutSnapshot } from "../collab/layout";
 import { NODE_SIZE } from "../collab/seed";
+import { upsertNodeCard } from "../editor/bridge";
 import { getFocus, setFocus } from "../state/focus";
 import { beginRound } from "../state/history";
 import { pushPending } from "../state/pending";
@@ -43,8 +53,42 @@ function shotsOf() {
   return deriveShots(timeline, (id) => nodes.get(id)?.title);
 }
 
+/** 执行一次宠物工具调用 */
+function runPetTool(call: PetToolCall): string {
+  const result = executePetTool(ydoc, call);
+  return result.ok ? `\n\n🐾 ${result.message}` : `\n\n（${result.message}）`;
+}
+
+/**
+ * AI 写文档（PRD/主界面.md §5.3）：以 nodeId 为键**幂等** upsert 正文块，
+ * 并把块 id 双绑回 node.blockIds。
+ *
+ * 幂等为什么天然成立：知识卡片只存 nodeId，标题/摘要实时从 Y.Doc 读，
+ * 所以「已存在」就是「已是最新」，不会追加、不会重复写。
+ *
+ * 已知不一致：我们的 UndoManager 只管 nodes/order/layout/annotations，
+ * 不管 BlockNote 的文档 fragment（它有自己一套 history，纳进来会双重撤销）。
+ * 所以撤销一轮 AI 改动后，卡片块会留下（显示为「未知节点」）。
+ */
+function syncNodeToDocument(nodeId: string): void {
+  const blockId = upsertNodeCard(nodeId);
+  if (!blockId) return;
+
+  const node = readNode(ydoc, nodeId);
+  if (!node) return;
+
+  const blockIds = node.blockIds ?? (node.blockId ? [node.blockId] : []);
+  if (blockIds.includes(blockId)) return; // 已经绑过，幂等退出
+
+  upsertNode(ydoc, { ...node, blockIds: [...blockIds, blockId] });
+}
+
 /** 执行一次画布工具调用，返回给用户看的短句 */
 export function runToolCall(name: string, input: unknown): string {
+  // 宠物工具优先（两个工具名空间不重叠）
+  const pet = toPetToolCall(name, input);
+  if (!("error" in pet)) return runPetTool(pet);
+
   const call = toCanvasToolCall(name, input);
   if ("error" in call) return `\n\n（工具调用被忽略：${call.error}）`;
 
@@ -57,6 +101,7 @@ export function runToolCall(name: string, input: unknown): string {
       setFocus(call.input.id);
       lastSpawnedId = call.input.id;
     }
+    if (call.name === "spawnNode" || call.name === "updateNode") syncNodeToDocument(call.input.id);
   }
   const message = applyToolResult(result);
   // 本轮从 startT 起自动播放（让宠物真地演一遍）
@@ -71,6 +116,17 @@ export interface AgentTurn {
 
 /** 本地路径：planner → executor → 回话 */
 export function runAgent(message: string): AgentTurn {
+  // 宠物意图优先："养一只蓝色的猫老师"
+  const petPlan = planPet(message, { hasPets: listPets(ydoc).length > 0 });
+  if (petPlan.calls.length > 0) {
+    const notes: string[] = [];
+    for (const call of petPlan.calls) {
+      const result = executePetTool(ydoc, call);
+      if (!result.ok) notes.push(`\n\n（${result.message}）`);
+    }
+    return { reply: petPlan.reply + notes.join(""), toolResults: [] };
+  }
+
   const nodes = [...getNodes(ydoc).values()];
   const layout = layoutSnapshot();
   // 传矩形而不是点：否则新节点算不出真正的空位（会压在已有节点上）
@@ -105,6 +161,8 @@ export function runAgent(message: string): AgentTurn {
         setFocus(call.input.id);
         lastSpawnedId = call.input.id;
       }
+      // 节点类写入 → 同步到文档并双绑 blockIds（幂等）
+      if (call.name === "spawnNode" || call.name === "updateNode") syncNodeToDocument(call.input.id);
     }
   }
   cursor += 2;

@@ -7,6 +7,7 @@ import {
   executePetTool,
   paletteFromColor,
   planPet,
+  toPetToolCall,
 } from "./pet-tools";
 
 const imported: PetSpec = {
@@ -122,5 +123,14 @@ describe("palette + planPet", () => {
   test("PET_TOOLS 名单完整", () => {
     expect(PET_TOOL_NAMES).toContain("createPet");
     expect(PET_TOOL_NAMES.length).toBe(5);
+  });
+
+  test("toPetToolCall 识别宠物工具、拒绝未知", () => {
+    expect(toPetToolCall("createPet", { name: "x" })).toMatchObject({ name: "createPet" });
+    expect(toPetToolCall("spawnNode", {})).toHaveProperty("error");
+  });
+
+  test("planPet 不误伤画布指令", () => {
+    expect(planPet("添加一个 Kafka 消息队列", { hasPets: false }).calls.length).toBe(0);
   });
 });

@@ -58,3 +58,46 @@ export function insertKnowledgeCard(nodeId: string): boolean {
   }
   return true;
 }
+
+/**
+ * 幂等 upsert：确保该节点在文档里有一张知识卡片，返回它的块 id。
+ *
+ * 幂等靠 `nodeId` 做键：卡片只存 nodeId、标题实时从 Y.Doc 读，
+ * 所以"更新"就是什么都不用做（不存在重复写的问题）。
+ * 见 PRD/主界面.md §5.3。
+ */
+export function upsertNodeCard(nodeId: string): string | undefined {
+  if (!editor) return undefined;
+
+  const existing = findCardBlock(nodeId);
+  if (existing) return existing.id;
+
+  insertKnowledgeCard(nodeId);
+  return findCardBlock(nodeId)?.id;
+}
+
+/** 文档里所有已落盘的节点 id（供"哪些节点还没有正文"判断） */
+export function documentedNodeIds(): string[] {
+  if (!editor) return [];
+  const out: string[] = [];
+  for (const block of editor.document) {
+    if (block.type !== "knowledgeCard") continue;
+    const nodeId = (block.props as { nodeId?: string }).nodeId;
+    if (nodeId) out.push(nodeId);
+  }
+  return out;
+}
+
+/**
+ * 移除某个节点的知识卡片（节点被删后清理孤儿卡片）。
+ *
+ * 为什么需要它：我们的 UndoManager 不管 BlockNote 的文档 fragment，
+ * 所以撤销一轮 AI 改动后卡片会留下，指向一个不存在的节点。
+ */
+export function removeKnowledgeCard(nodeId: string): boolean {
+  if (!editor) return false;
+  const block = findCardBlock(nodeId);
+  if (!block) return false;
+  editor.removeBlocks([block.id]);
+  return true;
+}

@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState, type JSX } from "react";
 import { createPixelPet, type PixelPetController } from "@lingrui/mascot";
-import { ensureDefaultPet, getActivePet, getPets, type PetSpec } from "@lingrui/knowledge";
+import { ensureDefaultPet, getActivePet, getActivePetMap, getPets, type PetSpec } from "@lingrui/knowledge";
 import { ydoc } from "../collab/doc";
 import { useFocus } from "../state/focus";
 import { getPlayerState, subscribePlayer } from "../state/player";
@@ -23,8 +23,13 @@ function useActivePet(): PetSpec | undefined {
     const update = () => setPet(getActivePet(ydoc));
     update();
     const pets = getPets(ydoc);
+    const active = getActivePetMap(ydoc);
     pets.observe(update);
-    return () => pets.unobserve(update);
+    active.observe(update);
+    return () => {
+      pets.unobserve(update);
+      active.unobserve(update);
+    };
   }, []);
 
   return pet;

@@ -3,9 +3,18 @@
  *
  * 关键约定（docs/architecture.md §1）：文档块与画布元素共享同一个 Y.Doc，
  * 块只持有 nodeId，正文存在 Y.Doc 里。
+ *
+ * ⚠️ 坑（踩过）：BlockNote 0.55 **只传 `collaboration` 是静默无效的**，
+ * 必须用 `withCollaboration()` 包装 options 才会注册协作扩展。
+ * 症状极具迷惑性：编辑器照常工作（内容来自 initialContent），
+ * 但 `ydoc.getXmlFragment("document-store").length === 0` ——
+ * 也就是文档**根本没进 Y.Doc、刷新就没了**。
+ * 另外 `withCollaboration` 会把 `initialContent` 覆盖成一个占位段落
+ * （避免各端随机 id 冲突），所以种子内容要自己补。
  */
 import { useEffect } from "react";
 import { useCreateBlockNote } from "@blocknote/react";
+import { withCollaboration } from "@blocknote/core/yjs";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
 import { awareness, blockFragment } from "./collab/doc";
@@ -38,12 +47,19 @@ const INITIAL_CONTENT = [
 export function NoteEditor() {
   const editor = useCreateBlockNote(
     {
-      schema,
-      collaboration: {
-        fragment: blockFragment(),
-        user: { name: "你", color: "#5b5bd6" },
-        ...(awareness ? { provider: { awareness } } : {}),
-      },
+      ...withCollaboration({
+        schema,
+        collaboration: {
+          fragment: blockFragment(),
+          user: { name: "你", color: "#5b5bd6" },
+          ...(awareness ? { provider: { awareness } } : {}),
+        },
+      }),
+      // withCollaboration 会把 initialContent 换成占位段落（避免各端随机 id 冲突），
+      // 这里覆盖回来。YSync 只在 fragment 为空时应用它，所以不会覆盖已有内容。
+      //
+      // 为什么不"挂载后 replaceBlocks 补种"：那会和 Yjs 的同步事务抢时序，
+      // 触发 y-prosemirror 的 restoreRelativeSelection 越界（Position out of range）。
       initialContent: INITIAL_CONTENT,
     },
     [],
