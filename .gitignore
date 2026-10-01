@@ -10,6 +10,12 @@ release/
 .env.local
 .env.*.local
 
+# 运行时敏感库（CC agent 会话 payload，切勿上传）
+.cc-agents/
+
+# 内部文档（不随仓库分发）
+docs/
+
 .DS_Store
 .idea/
 .vscode/*

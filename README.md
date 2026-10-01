@@ -1,162 +1,101 @@
+<div align="right">
+
+**English** | [中文](./README.zh-CN.md)
+
+</div>
+
 # LingRui Scribe
 
-> AI 基建动画解释器 + 画布宠物 + 知识落盘工具
+> A note-taking app with a knowledge canvas that explains itself — co-create the canvas with AI, then watch it walk you through it, pause anytime, and click into any node to dig deeper.
 
-用 Codex 风格的对话区 + Excalidraw 风格的知识画布，让 AI 调用服务器 / Redis / 数据库 /
-消息队列 / 网关等基建实体，由一只 VRM 动漫吉祥物在画布上跑动，把知识点"演"一遍，
-而不是"写"一遍。可暂停、重播、快进、点击节点追问，最后落盘成文档 / 动画 / 可交互场景。
+LingRui Scribe turns "explaining" into "performing": chat with AI to draw your knowledge onto a canvas that stays in sync with your notes. Hit play and the canvas performs the explanation along a timeline — pause, fast-forward, replay, or click any node to keep asking questions.
 
-## License
+## ✨ Features
 
-**AGPL-3.0-or-later**，见 [LICENSE](./LICENSE)。网络服务部署也必须向用户提供源码。
+- **AI × human co-edited canvas** — add nodes, connect, move, delete with plain language. A local rule-based explainer kicks in when no LLM is configured, so **it works out of the box, no API keys needed**
+- **Docs and canvas in sync** — one knowledge model, two views, bidirectional
+- **Self-explaining canvas** — the explanation plays along a timeline: pause / fast-forward / speed control / replay
+- **Click to dig deeper** — every node's detail card ships with FAQs you can keep asking
+- **Optional multi-user realtime collaboration** — edit the same canvas together
+- **Optional desktop app** — Electron shell with an embedded server, one-command packaging
 
-## 架构一句话
+## 🚀 Quick Start
 
-> **`packages/knowledge` 拥有"知识是什么"；`canvas` / `anim` / `mascot` 只负责"知识怎么显示"。**
-
-三个视图共享同一份 Knowledge Node，绝不维护两套数据模型。
-
-```
-                    Knowledge (Y.Doc / KnowledgeNode)
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ↓                     ↓                     ↓
-   文档视图              画布视图              动画视图
- (BlockNote)           (Excalidraw)      (PixiJS + VRM + 时间轴)
-        └─────────────────────┴─────────────────────┘
-                              ↓
-                        Yjs / Hocuspocus
-                              ↓
-                 Postgres + Redis + S3/MinIO
-```
-
-详见 [docs/architecture.md](./docs/architecture.md)。
-
-## 仓库结构
-
-```
-apps/
-  web/         Codex 风格前端（Vite + React 19）
-  collab/      Yjs 实时协同服务（Hocuspocus + Postgres + Redis）
-packages/
-  knowledge/   唯一真相：KnowledgeNode 模型 + Y.Doc schema
-  canvas/      Excalidraw 封装 + PixiJS 实时覆盖层
-  mascot/      VRM 加载、状态机、口型
-  anim/        时间轴 / tween / 播放器（seek / pause / ff）
-  ai/          assistant-ui + AI SDK + tool 定义
-  ui/          shadcn/ui 设计系统
-  vendor/      从上游 fork 的源码（见 VENDOR.md）
-docs/
-  architecture.md
-  adr/         架构决策记录
-PRD/
-  主界面.md     主界面 PRD（逐区盘点 + 共编闭环）
-  主界面.png
-```
-
-## 开发
-
-需要 [bun](https://bun.sh) ≥ 1.2。
+Prerequisites: [Bun ≥ 1.2](https://bun.sh) (optional: Docker, Node 18+).
 
 ```bash
+# 1. Install dependencies
 bun install
-bun run dev          # 前端 → http://localhost:5173
-bun run typecheck
-bun run test
 
-# 多人实时 + 真实 LLM（可选）
-docker compose up -d                 # Postgres + Valkey + MinIO
+# 2. Start the web app (localhost:5173)
+bun run dev
+```
+
+That's it — with **no collab server and no LLM**, data persists to local IndexedDB and the built-in local explainer does the teaching. Zero configuration to try the core experience.
+
+### Want multi-user collaboration?
+
+```bash
+# Start local dependencies (Postgres / Valkey / MinIO)
+docker compose up -d
+
+# Configure and start the collab server
 cp apps/collab/.env.example apps/collab/.env
-bun run dev:collab                   # → ws://localhost:1234，同时提供 /api/chat
-cp apps/web/.env.example apps/web/.env.local
+bun run dev:collab
 ```
 
-> ⚠️ **协同服务用 Node 跑**（`bun run dev:collab` 已封装：bun 构建 → node 运行）。
-> 原因：Hocuspocus 4 内部依赖 crossws 的 Node 适配器，在 Bun 下会直接抛错。
-> 见 [ADR-0010](./docs/adr/0010-collab-on-node-and-llm-proxy.md)。
->
-> Postgres / Redis 都是可选的：没有 DB 只告警不退出（文档不落库），
-> Redis 需要多实例时才设 `COLLAB_REDIS=1`。
+Then point `VITE_COLLAB_URL` to the collab server in `apps/web/.env` (copy from `apps/web/.env.example`).
 
-## 桌面端（Electron）
+### Plug in a real LLM
+
+Any OpenAI-compatible backend works (OpenAI / DeepSeek / Groq / Ollama / vLLM…):
 
 ```bash
-bun run dev:desktop      # 开发（electron-vite dev）
-bun run smoke:desktop    # 自检：内嵌服务 + token 边界 + renderer 真的渲染出画布
-bun run build:desktop    # 构建 main / preload / renderer
-bun run dist:desktop     # 打包（electron-builder）
-```
-
-桌面端不是另一个 app，而是把同一份 `apps/web` 装进本地容器（见 [PRD/桌面端.md](./PRD/桌面端.md)）：
-
-- **不 fork 前端**：`apps/desktop` 的 renderer 直接构建 `apps/web`，只换后端目标。
-  preload 把 `{ chatApi, collabUrl, token }` 注入 `window.lingrui`，
-  `apps/web` 优先用它，否则回退到 `VITE_*` 环境变量。
-- **内嵌服务**：Electron 主进程（Node）里跑 Hocuspocus + `/api/chat` 代理，
-  只绑 `127.0.0.1`、随机端口、一次性 token。**LLM Key 只在主进程**，renderer 永不接触。
-- **安全默认**：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`。
-
-> ⚠️ **首次安装需要下载 Electron 二进制**（~300MB）。若 GitHub 被墙，用镜像：
-> ```bash
-> ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" node apps/desktop/node_modules/electron/install.js
-> ```
-> 另外 bun 默认不跑 postinstall，所以 electron 的二进制不会被自动下载。
-
-## 接真实 LLM
-
-在 `apps/collab/.env` 里填：
-
-```bash
+# Fill these in apps/collab/.env
 OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.openai.com/v1   # 可换 DeepSeek / Groq / Ollama / vLLM
+OPENAI_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4o-mini
 ```
 
-不填也能用：`/api/chat` 返回 503，前端会**静默降级**到本地 planner。
-两条路径共用同一套画布工具（`packages/ai` 的 executor），
-所以「AI 自己画节点」的能力不依赖模型是否存在。
+Leave them blank and the app gracefully falls back to the local explainer.
 
-试试在对话框里输入「添加一个 Kafka 消息队列」，看画布。
-
-前端默认**不需要任何后端**：笔记与画布存在浏览器 IndexedDB 里，刷新不丢。
-要多端实时，把 `apps/web/.env.example` 复制为 `.env.local` 并指向协同服务。
-
-## 当前进度（P0 已完成）
-
-| 能力 | 状态 |
-|---|---|
-| 文档视图（BlockNote，绑定 Y.Doc） | ✅ |
-| 画布视图（Excalidraw，从 Knowledge 派生） | ✅ |
-| 点击画布节点 ↔ 文档知识卡片双向定位 | ✅ |
-| 本地持久化（刷新不丢） | ✅ |
-| 节点拖动位置持久化（存在 Y.Doc layout） | ✅ |
-| 多人实时（HocuspocusProvider，可选） | ✅ |
-| AI 追问 + 落盘到笔记 | ✅ 无真实 LLM 也可用 |
-| AI 自己画节点（画布工具层） | ✅ 有 LLM 走模型，无 LLM 走本地 planner |
-| 真实 LLM（/api/chat 代理任意 OpenAI 兼容后端） | ✅ |
-| 用户手绘内容保留（知识变更不重置） | 🟡 已保留，但仍按指纹整场景重建（待按 ADR-0011 改增量） |
-| 时间轴 / 吉祥物 / 导出 | ⬜ P2–P4 |
-| 桌面端（Electron 壳 + 内嵌服务） | ✅ `bun run smoke:desktop` 自检通过 |
-| 用户手绘成为一等公民（Annotation 进 Y.Doc） | ✅ 可持久化、可协同、AI 可按 id 引用 |
-| 共编闭环（截图+数据回灌 → 增量改 → 三级保险） | ✅ 见 ADR-0011 |
-| 三级保险（新增直接应用 / 破坏先确认 / 整轮可撤销） | ✅ |
-| 主界面壳（图标导航 / 真实笔记树 / 主标题区） | ⬜ P1.5 |
-| 共编基座（Annotation + provenance + 增量 patch + 节点详情卡） | ⬜ P1.6 |
-
-已知欠账与原因见 [ADR-0009](./docs/adr/0009-canvas-and-runtime-sync.md)（画布同步部分已被
-[ADR-0011](./docs/adr/0011-ai-cocanvas-incremental-editing.md) 取代）。
-
-主界面逐区盘点与待确认交互见 [`PRD/主界面.md`](./PRD/主界面.md)。
-
-## 缝合策略
-
-本项目采用 **vendor fork**：把上游仓库钉在固定 commit 上，整目录拷进 `packages/vendor/<name>/`，
-再按需删减。所有上游来源、commit、license 记录在 [VENDOR.md](./VENDOR.md)。
+### Desktop app (optional)
 
 ```bash
-# 例：把 BlockNote 钉在某个 commit 拷进来
-bun run vendor blocknote https://github.com/TypeCellOS/BlockNote.git <commit-sha> packages
+bun run dev:desktop    # dev with hot reload
+bun run dist:desktop   # build distributable package
 ```
 
-**不要手动复制粘贴**——那样无法跟上游 diff、无法 rebase。详见
-[ADR-0001](./docs/adr/0001-license-and-vendoring.md)。
+## 📖 Usage
+
+Type plain-language instructions in the chat panel, for example:
+
+- "Draw a user, a gateway and a Redis. Connect the user to the gateway, and let the gateway read Redis."
+- "Move MySQL below RabbitMQ and connect them."
+- "Walk me through this diagram."
+
+- Click any node on the canvas to open its detail card and follow up with FAQ questions
+- Use the timeline at the bottom to control the explanation: pause / fast-forward / speed / replay
+- Skip or edit anything mid-explanation and it adapts — no dead ends
+
+## 🧩 Tech Stack
+
+| Layer | Tech |
+|---|---|
+| Frontend | Vite · React 19 · BlockNote · Excalidraw |
+| Collaboration | Yjs · Hocuspocus |
+| Storage | Postgres · Valkey (Redis) · MinIO (S3) |
+| Runtime | Bun · Electron (desktop) |
+
+## 📁 Repo Layout
+
+```
+apps/web        Web app
+apps/collab     Collaboration + LLM proxy server
+apps/desktop    Electron desktop app
+packages/       knowledge / canvas / anim / ai / mascot / ui libraries
+```
+
+## 🔒 License
+
+**AGPL-3.0-or-later**, see [LICENSE](./LICENSE). Network deployments must also provide source code to users. Upstream components and their licenses are documented in [VENDOR.md](./VENDOR.md) and [NOTICE](./NOTICE).
