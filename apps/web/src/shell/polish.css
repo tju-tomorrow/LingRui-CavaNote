@@ -296,6 +296,9 @@ body {
   line-height: 1.7;
   color: var(--text-2);
   background: transparent;
+  /* BlockNote 默认给 0 54px 的左右内边距，窄栏里会把正文挤到 200px 导致标题乱换行；
+     这里收窄，改由 .editor-host 统一控制留白 */
+  padding-inline: 0;
 }
 .editor-host h1 {
   font-size: 25px;
@@ -510,11 +513,19 @@ html[data-glass="desktop"] .topbar .tb-avatar {
 
 /* ---------- 15. 可拖拽分栏 ---------- */
 /* 文档 | 细条 | 画布。宽度比例由 :root 上的 --doc-w 控制（Splitter 拖动写入） */
-.workspace {
+.app.lr:not(.present) .workspace {
   grid-template-columns: var(--doc-w, 38%) 6px 1fr;
 }
+.app.lr:not(.present) .workspace .pane.doc-pane {
+  grid-column: 1;
+}
+.app.lr:not(.present) .workspace .pane.canvas {
+  grid-column: 3;
+}
+.app.lr:not(.present) .workspace .splitter {
+  grid-column: 2;
+}
 .splitter {
-  grid-row: 1;
   position: relative;
   cursor: col-resize;
   background: transparent;
@@ -547,6 +558,84 @@ body.col-resizing {
 /* 细条占了一列，文档 pane 不再需要自己的右边框 */
 .pane.doc-pane {
   border-right: none;
+}
+
+/* ---------- 16. 侧栏视图（知识库 / 项目 / 标签 / 设置）---------- */
+.view-page {
+  padding: 16px 18px 48px;
+  gap: 14px;
+}
+.view-head h2 {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.view-search {
+  border-radius: var(--r);
+  padding: 7px 10px;
+  background: var(--bg);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.view-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.view-chip {
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 3px 11px;
+  font-weight: 500;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.view-chip:hover {
+  background: var(--panel);
+}
+.view-chip.active {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+}
+.view-row {
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+.view-row:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.view-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+.project-card {
+  background: var(--bg);
+  border-radius: var(--r);
+  box-shadow: var(--sh-1);
+  transition: border-color 0.12s, box-shadow 0.12s, transform 0.06s;
+}
+.project-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--sh-2);
+  transform: translateY(-1px);
+}
+.view-primary {
+  border-radius: var(--r);
+  padding: 6px 13px;
+  font-weight: 550;
+  box-shadow: 0 1px 2px rgba(91, 91, 214, 0.3);
+}
+
+/* 暗色：这些视图里有硬编码的浅色底 */
+:root[data-theme="dark"] .view-search,
+:root[data-theme="dark"] .view-chip,
+:root[data-theme="dark"] .project-card,
+:root[data-theme="dark"] .settings-block {
+  background: var(--panel);
+}
+:root[data-theme="dark"] .view-chip.active {
+  background: var(--accent-weak);
+}
+:root[data-theme="dark"] .view-row:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* ---------- 12. toast ---------- */

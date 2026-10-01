@@ -25,7 +25,9 @@ import {
   replaceChapters,
   upsertNode,
 } from "@lingrui/knowledge";
+import type * as Y from "yjs";
 import { deriveShots, type Action } from "@lingrui/anim";
+import { ROOT_TIMELINE } from "@lingrui/knowledge";
 import { ydoc } from "../collab/doc";
 import { layoutSnapshot } from "../collab/layout";
 import { NODE_SIZE } from "../collab/seed";
@@ -43,7 +45,7 @@ let lastSpawnedId: string | undefined;
 const timeline: Action[] = [];
 
 function applyToolResult(result: ToolResult): string {
-  timeline.push(...result.actions);
+  pushActions(result.actions);
   cursor += 1.5;
 
   // 三级保险第二级：破坏人的元素时不直接应用，挂起等用户确认
@@ -219,4 +221,52 @@ export function runAgent(message: string): AgentTurn {
 /** P2 的时间轴会从这里取动作流 */
 export function exportedTimeline(): Action[] {
   return [...timeline];
+}
+
+// ---------------------------------------------------------------------------
+// 演出的持久化
+// ---------------------------------------------------------------------------
+
+/**
+ * 动作流同时写进 Y.Doc。
+ *
+ * 之前只在内存里：刷新一下演出就没了（chapters 和缩略图都还在，唯独演不了）——
+ * 「数据在、界面没有」是最让人困惑的一种状态。
+ */
+function pushActions(actions: Action[]): void {
+  if (actions.length === 0) return;
+  timeline.push(...actions);
+  timelineArray().push(actions);
+}
+
+function timelineArray(): Y.Array<Action> {
+  return ydoc.getArray<Action>(ROOT_TIMELINE);
+}
+
+/**
+ * 从 Y.Doc 恢复演出（应用启动时调一次）。
+ *
+ * 同时把内存游标推到末尾：新的一轮接着老的动作流继续排，不会时间倒流。
+ */
+export function hydrateTimeline(): boolean {
+  const stored = timelineArray().toArray();
+  if (stored.length === 0) return false;
+
+  timeline.length = 0;
+  timeline.push(...stored);
+
+  const last = stored.reduce((max, a) => Math.max(max, a.t), 0);
+  cursor = last + 1.5;
+
+  player.load(exportedTimeline(), "AI 演出", last, shotsOf());
+  return true;
+}
+
+/** 清空演出（设置里的「重来」用得上） */
+export function clearTimeline(): void {
+  timeline.length = 0;
+  cursor = 0;
+  const array = timelineArray();
+  if (array.length > 0) array.delete(0, array.length);
+  player.clear();
 }

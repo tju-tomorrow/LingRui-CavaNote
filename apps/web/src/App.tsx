@@ -15,10 +15,13 @@ import { useEffect, useState } from "react";
 import { NoteEditor } from "./NoteEditor";
 import { CanvasStage } from "./CanvasStage";
 import { GhostOverlay } from "./canvas/GhostOverlay";
+import { SpotlightOverlay } from "./canvas/SpotlightOverlay";
 import { ChatPanel } from "./chat/ChatPanel";
 import { revealNode } from "./editor/bridge";
 import { PetLayer } from "./pet/PetLayer";
 import { TimelineBar } from "./timeline/TimelineBar";
+import { SubtitleBar } from "./timeline/SubtitleBar";
+import { hydrateTimeline } from "./chat/agent";
 import { useFocus } from "./state/focus";
 import { setView as setShellView, useView } from "./state/view";
 import { useActiveNote, setActiveNote } from "./state/notes";
@@ -59,6 +62,12 @@ export function App(): JSX.Element {
   useEffect(() => {
     reconnectCollab();
   }, [auth.token]);
+
+  // 演出是持久化的：启动时把上一轮的动作用恢复出来，
+  // 否则刷新后 chapters / 缩略图都在、偏偏演不了
+  useEffect(() => {
+    void seeded.then(() => hydrateTimeline());
+  }, []);
 
   // 笔记列表就绪后选中一篇（老数据认领为「默认笔记」）。
   // 只考虑**真笔记**：分组没有正文，选它会把编辑器绑到空 fragment 上。
@@ -135,8 +144,12 @@ export function App(): JSX.Element {
         <section className="pane canvas">
           <CanvasStage />
           <CanvasHint />
+          {/* 演出：当前讲的节点亮起、其余压暗 */}
+          <SpotlightOverlay />
           {/* 三级保险：把待确认的破坏类补丁在画布上就地标出来 */}
           <GhostOverlay />
+          {/* 大字旁白（顺带驱动 TTS） */}
+          <SubtitleBar />
           <NodeDetailCard />
         </section>
 

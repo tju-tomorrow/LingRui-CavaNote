@@ -121,6 +121,8 @@ export const ROOT_LAYOUT = "layout";
 export const ROOT_ANNOTATIONS = "annotations";
 export const ROOT_CHAPTERS = "chapters";
 export const ROOT_PROGRESS = "progress";
+/** 演出动作流（SceneScript 的输入）——持久化后刷新不会丢演出 */
+export const ROOT_TIMELINE = "timeline";
 
 export type NoteId = string;
 

@@ -43,6 +43,8 @@ export function PetLayer(): JSX.Element | null {
   const controllerRef = useRef<PixelPetController | null>(null);
   const narrationRef = useRef<string | null>(null);
   const [narration, setNarration] = useState<string | null>(null);
+  /** 演出中（旁白由字幕条负责，宠物不再重复） */
+  const [performing, setPerforming] = useState(false);
 
   // 建立控制器 + rAF 渲染（组件 unmount / 换宠时重建）
   useEffect(() => {
@@ -78,6 +80,9 @@ export function PetLayer(): JSX.Element | null {
 
       controller.setState(s.snapshot.pet.state);
 
+      const live = Boolean(s.script) && (s.playing || s.t > 0);
+      setPerforming((prev) => (prev === live ? prev : live));
+
       const text = s.snapshot.narration?.text ?? null;
       if (text !== narrationRef.current) {
         narrationRef.current = text;
@@ -104,7 +109,8 @@ export function PetLayer(): JSX.Element | null {
 
   if (!pet || pet.form !== "pixel") return null;
 
-  const bubble = narration ?? (focus ? "我来讲解这条链路 →" : null);
+  // 演出进行中：旁白交给底部字幕条（大字、居中），宠物旁边不再重复一遍小气泡
+  const bubble = performing ? null : (narration ?? (focus ? "我来讲解这条链路 →" : null));
 
   return (
     <div

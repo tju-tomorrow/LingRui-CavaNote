@@ -7,6 +7,7 @@ import { useState } from "react";
 import { logout, useAuth } from "../auth/store";
 import { useDocumentActions } from "./actions";
 import { useTheme } from "./theme";
+import { setTtsEnabled, ttsSupported, useTtsEnabled } from "../timeline/tts";
 import { LoginDialog } from "./LoginDialog";
 import { IconExport, IconMoon, IconPlay, IconShare, IconStop, IconSun } from "./icons";
 
@@ -23,6 +24,7 @@ export function TopBar({
   const [accountOpen, setAccountOpen] = useState(false);
   const { exportDoc, share } = useDocumentActions();
   const auth = useAuth();
+  const tts = useTtsEnabled();
 
   return (
     <header className="topbar tb">
@@ -43,6 +45,17 @@ export function TopBar({
       >
         {theme === "light" ? <IconSun size={17} /> : <IconMoon size={17} />}
       </button>
+
+      {ttsSupported() ? (
+        <button
+          className={`tb-icon${tts ? " is-on" : ""}`}
+          type="button"
+          title={tts ? "关闭旁白朗读" : "开启旁白朗读（TTS）"}
+          onClick={() => setTtsEnabled(!tts)}
+        >
+          {tts ? "🔊" : "🔈"}
+        </button>
+      ) : null}
 
       <button
         className="tb-icon"
