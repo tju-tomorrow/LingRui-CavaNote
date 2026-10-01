@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createKnowledgeDoc, getLayout, markHuman, readNode } from "@lingrui/knowledge";
+import { createKnowledgeDoc, getAnnotations, getLayout, markHuman, readAnnotation, readNode, upsertAnnotation } from "@lingrui/knowledge";
 import { applyPending, executeTool, summarizeRisk, type ToolContext } from "./executor";
 
 function ctx(): ToolContext {
@@ -220,5 +220,84 @@ describe("spawnNode 的坐标必须落到 layout（回归）", () => {
     const c = ctx();
     executeTool(c, { name: "spawnNode", input: { id: "a", kind: "service", title: "A", at: [0, 0] } });
     expect(getLayout(c.doc).get("a")).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("Annotation 类工具", () => {
+  const box = { type: "sticky" as const, x: 10, y: 10, width: 200, height: 120 };
+
+  test("annotate 写入 Y.Doc 并标 origin=ai", () => {
+    const c = ctx();
+    const r = executeTool(c, {
+      name: "annotate",
+      input: { id: "a1", type: "sticky", element: box, text: "别忘幂等" },
+    });
+    expect(r.ok).toBe(true);
+    expect(r.risk).toBe("add");
+    const back = readAnnotation(c.doc, "a1");
+    expect(back?.text).toBe("别忘幂等");
+    expect(back?.provenance.origin).toBe("ai");
+  });
+
+  test("不传 id 时自动生成，且可挂到节点", () => {
+    const c = ctx();
+    executeTool(c, { name: "spawnNode", input: { id: "gateway", kind: "gateway", title: "网关", at: [0, 0] } });
+    const r = executeTool(c, { name: "annotate", input: { type: "shape", element: box, attachedTo: "gateway" } });
+    expect(r.ok).toBe(true);
+    const all = [...getAnnotations(c.doc).values()];
+    expect(all).toHaveLength(1);
+    expect(all[0]?.attachedTo).toBe("gateway");
+    expect(all[0]?.id.startsWith("anno-")).toBe(true);
+  });
+
+  test("挂到不存在的节点、或缺几何时失败", () => {
+    const c = ctx();
+    expect(executeTool(c, { name: "annotate", input: { type: "shape", element: box, attachedTo: "ghost" } }).ok).toBe(false);
+    expect(
+      executeTool(c, {
+        name: "annotate",
+        input: { type: "shape", element: { type: "shape", x: 0, y: 0 } as never },
+      }).ok,
+    ).toBe(false);
+  });
+
+  test("改 AI 自己的标注直接生效", () => {
+    const c = ctx();
+    executeTool(c, { name: "annotate", input: { id: "a1", type: "sticky", element: box, text: "旧" } });
+    const r = executeTool(c, { name: "updateAnnotation", input: { id: "a1", text: "新" } });
+    expect(r.applied).toBe(true);
+    expect(readAnnotation(c.doc, "a1")?.text).toBe("新");
+  });
+
+  test("改人画的标注要先确认", () => {
+    const c = ctx();
+    executeTool(c, { name: "annotate", input: { id: "a1", type: "sticky", element: box, text: "我写的" } });
+    // 模拟人改过
+    upsertAnnotation(c.doc, { ...readAnnotation(c.doc, "a1")!, provenance: { origin: "human" } });
+
+    const held = executeTool(c, { name: "updateAnnotation", input: { id: "a1", text: "AI 想改" } });
+    expect(held.applied).toBe(false);
+    expect(readAnnotation(c.doc, "a1")?.text).toBe("我写的");
+
+    applyPending(c, held.pending!.call);
+    expect(readAnnotation(c.doc, "a1")?.text).toBe("AI 想改");
+  });
+
+  test("删人画的标注要先确认；删 AI 的直接生效", () => {
+    const c = ctx();
+    executeTool(c, { name: "annotate", input: { id: "mine", type: "shape", element: box } });
+    executeTool(c, { name: "annotate", input: { id: "yours", type: "shape", element: box } });
+    upsertAnnotation(c.doc, { ...readAnnotation(c.doc, "yours")!, provenance: { origin: "human" } });
+
+    expect(executeTool(c, { name: "deleteAnnotation", input: { id: "mine" } }).applied).toBe(true);
+    expect(readAnnotation(c.doc, "mine")).toBeUndefined();
+
+    const held = executeTool(c, { name: "deleteAnnotation", input: { id: "yours" } });
+    expect(held.applied).toBe(false);
+    expect(held.risk).toBe("destructive");
+    expect(readAnnotation(c.doc, "yours")).toBeDefined();
+
+    applyPending(c, held.pending!.call);
+    expect(readAnnotation(c.doc, "yours")).toBeUndefined();
   });
 });

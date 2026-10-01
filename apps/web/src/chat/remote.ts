@@ -29,9 +29,17 @@ export const CHAT_API: string =
 
 export const remoteEnabled = CHAT_API !== "off";
 
+export interface RemoteExtras {
+  /** 结构化画布上下文（已渲染成文本，见 snapshotToPrompt） */
+  context?: string;
+  /** data URL 截图 */
+  image?: string;
+}
+
 export async function* streamRemote(
   messages: ChatMessage[],
   signal: AbortSignal,
+  extras: RemoteExtras = {},
 ): AsyncGenerator<RemoteEvent> {
   const response = await fetch(CHAT_API, {
     method: "POST",
@@ -39,7 +47,7 @@ export async function* streamRemote(
       "content-type": "application/json",
       ...(bridge?.token ? { "x-lingrui-token": bridge.token } : {}),
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, ...extras }),
     signal,
   });
 

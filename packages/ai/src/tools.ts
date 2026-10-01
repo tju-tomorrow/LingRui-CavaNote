@@ -57,6 +57,18 @@ export const CANVAS_TOOLS = {
     description: "让吉祥物在某个时间点说一句话",
     when: "当需要旁白时",
   },
+  annotate: {
+    description: "在画布上添加标注（便签 / 手绘 / 高亮 / 形状），可挂到某个节点",
+    when: "当需要给用户圈重点、写便签时",
+  },
+  updateAnnotation: {
+    description: "修改已有标注的文字或几何",
+    when: "当要纠正标注位置或内容时",
+  },
+  deleteAnnotation: {
+    description: "删除一条标注",
+    when: "当标注已经过时且确认要删时",
+  },
 } as const;
 
 export type CanvasToolName = keyof typeof CANVAS_TOOLS;
@@ -71,6 +83,9 @@ export const WRITE_TOOLS: CanvasToolName[] = [
   "connect",
   "disconnect",
   "setStyle",
+  "annotate",
+  "updateAnnotation",
+  "deleteAnnotation",
 ];
 
 /** 把 LLM 返回的 tool 调用转成内部可执行的形状（含最小校验） */

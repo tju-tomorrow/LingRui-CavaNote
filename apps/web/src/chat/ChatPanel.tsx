@@ -20,10 +20,16 @@ import {
 import { runAgent, runToolCall } from "./agent";
 import { chunks, sleep, textOf } from "./text";
 import { remoteEnabled, streamRemote, type ChatMessage } from "./remote";
+import { freezeCanvasContext } from "../canvas/context";
 import { insertKnowledgeCard } from "../editor/bridge";
 import { useFocus } from "../state/focus";
+import { snapshotToPrompt } from "@lingrui/ai";
 
 function createAdapter(): ChatModelAdapter {
+  // 上一次远端是否可用。为 false 时不再截屏（截屏有成本），
+  // 但仍会尝试请求——服务一旦起来就会自动恢复。
+  let remoteHealthy: boolean | null = null;
+
   return {
     async *run({ messages, abortSignal }) {
       const question =
@@ -38,10 +44,19 @@ function createAdapter(): ChatModelAdapter {
 
       // ---- 路径 1：真实 LLM ----
       if (remoteEnabled) {
+        // 冻结上下文：截图 + 可寻址数据，两者同版本（ADR-0011 决策 4）
+        const frozen =
+          remoteHealthy === false
+            ? null
+            : await freezeCanvasContext().catch(() => null);
+        const extras = frozen
+          ? { context: snapshotToPrompt(frozen.snapshot), image: frozen.screenshot }
+          : {};
+
         let accumulated = "";
         let started = false;
         try {
-          for await (const event of streamRemote(payload, abortSignal)) {
+          for await (const event of streamRemote(payload, abortSignal, extras)) {
             if (event.type === "text") {
               started = true;
               accumulated += event.delta;
@@ -54,8 +69,12 @@ function createAdapter(): ChatModelAdapter {
               throw new Error(event.message);
             }
           }
-          if (accumulated.trim()) return;
+          if (accumulated.trim()) {
+            remoteHealthy = true;
+            return;
+          }
         } catch (error) {
+          remoteHealthy = false;
           if (started) {
             // 已经输出过内容，不再拼接本地回复，避免两段话打架
             yield {

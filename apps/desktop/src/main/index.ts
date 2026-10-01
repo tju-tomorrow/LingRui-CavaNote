@@ -76,14 +76,26 @@ function rendererEntry(): { url?: string; file?: string } {
 }
 
 function createWindow(options: { show: boolean } = { show: true }): BrowserWindow {
+  // macOS 玻璃（参考 cc-agents_desktop 的 Tauri hud 材质，这里是 Electron 等价物）：
+  //   - vibrancy: "under-window" → NSVisualEffectView，跟随系统深/浅外观
+  //   - titleBarStyle: "hiddenInset" → 隐藏原生标题栏，红绿灯浮在内容区左上
+  //   - backgroundColor 透明 → 防首帧白闪，且不盖住 vibrancy 材质
+  const isDarwin = process.platform === "darwin";
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    backgroundColor: "#ffffff",
+    backgroundColor: isDarwin ? "#00000000" : "#ffffff",
     title: "LingRui Scribe",
     show: options.show,
+    ...(isDarwin
+      ? {
+          titleBarStyle: "hiddenInset" as const,
+          trafficLightPosition: { x: 16, y: 20 },
+          vibrancy: "under-window" as const,
+        }
+      : {}),
     webPreferences: windowPreferences(),
   });
 

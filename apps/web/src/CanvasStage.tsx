@@ -42,6 +42,7 @@ import { useAnnotations, useKnowledgeLayout, useKnowledgeNodes } from "./collab/
 import { NODE_SIZE, type NodeLayout } from "./collab/seed";
 import { setNodePosition } from "./collab/layout";
 import { ydoc } from "./collab/doc";
+import { registerCanvas } from "./canvas/bridge";
 import { setFocus } from "./state/focus";
 
 type ExcalidrawProps = ComponentProps<typeof Excalidraw>;
@@ -192,6 +193,8 @@ export function CanvasStage() {
         initialData={INITIAL_DATA}
         excalidrawAPI={(nextApi) => {
           setApi(nextApi);
+          // 聊天面板靠它截屏回灌上下文（ADR-0011 决策 4）
+          registerCanvas(nextApi);
           if (import.meta.env.DEV) {
             // 开发期调试通道：__canvasApi.getSceneElements() 可直接查场景
             (window as unknown as Record<string, unknown>)["__canvasApi"] = nextApi;

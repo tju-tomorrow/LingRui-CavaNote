@@ -33,11 +33,40 @@ interface ChatMessage {
   content: string;
 }
 
-async function readJson(req: IncomingMessage): Promise<{ messages?: ChatMessage[] }> {
+async function readJson(
+  req: IncomingMessage,
+): Promise<{ messages?: ChatMessage[]; context?: string; image?: string }> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
   const raw = Buffer.concat(chunks).toString("utf8");
-  return raw ? (JSON.parse(raw) as { messages?: ChatMessage[] }) : {};
+  return raw ? (JSON.parse(raw) as { messages?: ChatMessage[]; context?: string; image?: string }) : {};
+}
+
+/**
+ * 把画布上下文拼进最后一条 user 消息（ADR-0011 决策 4）。
+ * 顺序：用户原话 → 可寻址数据 → 截图。
+ * 模型先拿到 id 体系，再用截图对齐视觉意图。
+ */
+function buildOpenAiMessages(
+  messages: ChatMessage[],
+  context?: string,
+  image?: string,
+): unknown[] {
+  const lastUserIndex = messages.reduce(
+    (found, message, index) => (message.role === "user" ? index : found),
+    -1,
+  );
+
+  return messages.map((message, index) => {
+    if (index !== lastUserIndex || (!context && !image)) return message;
+
+    const parts: unknown[] = [];
+    if (message.content) parts.push({ type: "text", text: message.content });
+    if (context) parts.push({ type: "text", text: context });
+    if (image) parts.push({ type: "image_url", image_url: { url: image } });
+
+    return { role: message.role, content: parts };
+  });
 }
 
 function send(res: ServerResponse, event: unknown): void {
@@ -88,8 +117,10 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
   }
 
   let messages: ChatMessage[];
+  let context: string | undefined;
+  let image: string | undefined;
   try {
-    ({ messages = [] } = await readJson(req));
+    ({ messages = [], context, image } = await readJson(req));
   } catch {
     res.writeHead(400).end(JSON.stringify({ error: "请求体不是合法 JSON" }));
     return;
@@ -114,7 +145,10 @@ export async function handleChat(req: IncomingMessage, res: ServerResponse): Pro
         model,
         stream: true,
         tools: openAiTools(),
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          ...buildOpenAiMessages(messages, context, image),
+        ],
       }),
     });
   } catch (error) {

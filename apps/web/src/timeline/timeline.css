@@ -1,0 +1,44 @@
+/* 时间轴控制条（局部样式，避免污染全局 index.css） */
+.tl .tl-btn {
+  border: 1px solid var(--border, #e5e5e5);
+  background: #fff;
+  color: var(--text, #1e1e1e);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  flex: none;
+}
+
+.tl .tl-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tl .tl-btn:not(:disabled):hover {
+  border-color: var(--accent, #5b5bd6);
+  color: var(--accent, #5b5bd6);
+}
+
+.tl .tl-rate {
+  min-width: 52px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tl .tl-time {
+  font-size: 12px;
+  color: var(--muted, #8a8a8a);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.tl .tl-range {
+  flex: 1;
+  accent-color: var(--accent, #5b5bd6);
+}
+
+.tl .tl-hint {
+  font-size: 12px;
+  color: var(--muted, #8a8a8a);
+  flex: none;
+}

@@ -9,7 +9,31 @@
  * 禁止在渲染回调里写共享状态。
  */
 
+import type { PetState } from "@lingrui/knowledge";
+
+export type { PetState };
+
 export type MascotState = "idle" | "run" | "talk" | "point" | "think";
+
+/** 旧 mascot 状态 ⇄ 新宠物教学状态（talk 即 explain） */
+export const MASCOT_TO_PET: Record<MascotState, PetState> = {
+  idle: "idle",
+  run: "run",
+  talk: "explain",
+  point: "point",
+  think: "think",
+};
+
+export const PET_TO_MASCOT: Record<PetState, MascotState> = {
+  idle: "idle",
+  think: "think",
+  explain: "talk",
+  point: "point",
+  run: "run",
+  celebrate: "talk",
+  confused: "think",
+  sleep: "idle",
+};
 
 export type Action =
   | { t: number; kind: "node.spawn"; nodeId: string; at: Vec2 }
@@ -18,8 +42,14 @@ export type Action =
   | { t: number; kind: "node.state"; nodeId: string; to: string }
   | { t: number; kind: "edge.connect"; from: string; to: string; label?: string }
   | { t: number; kind: "flow.send"; from: string; to: string; label?: string }
+  // 兼容旧名（mascot）：内部同样驱动 pet 状态
   | { t: number; kind: "mascot.moveTo"; nodeId: string; state?: MascotState }
   | { t: number; kind: "mascot.say"; text: string }
+  // 宠物（Personal Pet）：teacher 语义，见 PRD/宠物.md §7
+  | { t: number; kind: "pet.moveTo"; nodeId: string; state?: PetState }
+  | { t: number; kind: "pet.say"; text: string; nodeId?: string }
+  | { t: number; kind: "pet.teach"; nodeId: string; text: string; state?: PetState }
+  | { t: number; kind: "pet.react"; to: "confused" | "aha" | "celebrate" }
   | { t: number; kind: "camera.pan"; to: Vec2; zoom?: number };
 
 export type Vec2 = readonly [number, number];
@@ -37,6 +67,8 @@ export interface SceneState {
   edges: Map<string, EdgeVisual>;
   flows: FlowVisual[];
   mascot: { at: Vec2; state: MascotState };
+  /** 宠物（Personal Pet）：教学状态的唯一来源 */
+  pet: { at: Vec2; state: PetState };
   camera: { at: Vec2; zoom: number };
   focus: string | null;
   narration: { nodeId: string | null; text: string } | null;
@@ -89,12 +121,16 @@ export const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 export function sampleAt(script: SceneScript, t: number): SceneState {
   const actions = [...script.actions].sort((a, b) => a.t - b.t);
 
+  let petAt: Vec2 = [0, 0];
+  let petState: PetState = "idle";
+
   const state: SceneState = {
     t,
     nodes: new Map(),
     edges: new Map(),
     flows: [],
-    mascot: { at: [0, 0], state: "idle" },
+    mascot: { at: petAt, state: "idle" },
+    pet: { at: petAt, state: petState },
     camera: { at: [0, 0], zoom: 1 },
     focus: null,
     narration: null,
@@ -143,16 +179,47 @@ export function sampleAt(script: SceneScript, t: number): SceneState {
       }
 
       case "mascot.moveTo": {
-        const target = state.nodes.get(a.nodeId)?.at ?? state.mascot.at;
+        const target = state.nodes.get(a.nodeId)?.at ?? petAt;
         const p = easeInOutQuad(local / DURATION.move);
-        state.mascot.at = [lerp(state.mascot.at[0], target[0], p), lerp(state.mascot.at[1], target[1], p)];
-        state.mascot.state = local < DURATION.move ? (a.state ?? "run") : "idle";
+        petAt = [lerp(petAt[0], target[0], p), lerp(petAt[1], target[1], p)];
+        petState = local < DURATION.move ? MASCOT_TO_PET[a.state ?? "run"] : "idle";
         break;
       }
 
       case "mascot.say":
-        state.mascot.state = "talk";
+        petState = "explain";
         state.narration = { nodeId: state.focus, text: a.text };
+        break;
+
+      case "pet.moveTo": {
+        const target = state.nodes.get(a.nodeId)?.at ?? petAt;
+        const p = easeInOutQuad(local / DURATION.move);
+        petAt = [lerp(petAt[0], target[0], p), lerp(petAt[1], target[1], p)];
+        petState = local < DURATION.move ? (a.state ?? "run") : "idle";
+        break;
+      }
+
+      case "pet.say":
+        petState = "explain";
+        state.narration = { nodeId: a.nodeId ?? state.focus, text: a.text };
+        break;
+
+      case "pet.teach": {
+        const target = state.nodes.get(a.nodeId)?.at ?? petAt;
+        if (local < DURATION.move) {
+          const p = easeInOutQuad(local / DURATION.move);
+          petAt = [lerp(petAt[0], target[0], p), lerp(petAt[1], target[1], p)];
+          petState = a.state ?? "run";
+        } else {
+          petAt = target;
+          petState = "explain";
+          state.narration = { nodeId: a.nodeId, text: a.text };
+        }
+        break;
+      }
+
+      case "pet.react":
+        petState = a.to === "aha" ? "think" : a.to;
         break;
 
       case "node.focus":
@@ -165,6 +232,8 @@ export function sampleAt(script: SceneScript, t: number): SceneState {
     }
   }
 
+  state.pet = { at: petAt, state: petState };
+  state.mascot = { at: petAt, state: PET_TO_MASCOT[petState] };
   return state;
 }
 

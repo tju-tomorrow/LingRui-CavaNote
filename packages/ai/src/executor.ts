@@ -11,10 +11,16 @@ import type * as Y from "yjs";
 import {
   getNodes,
   isHumanOwned,
+  readAnnotation,
   readNode,
+  removeAnnotation,
   removeNode,
   setLayoutPosition,
+  upsertAnnotation,
   upsertNode,
+  type Annotation,
+  type AnnotationElement,
+  type AnnotationType,
   type KnowledgeNode,
   type NodeKind,
   type RelationKind,
@@ -73,6 +79,26 @@ export interface FlowInput {
   label?: string;
 }
 
+export interface AnnotateInput {
+  /** 省略则自动生成 */
+  id?: string;
+  type: AnnotationType;
+  /** 挂到某个节点；省略 = 自由注释 */
+  attachedTo?: string;
+  element: AnnotationElement;
+  text?: string;
+}
+
+export interface UpdateAnnotationInput {
+  id: string;
+  text?: string;
+  element?: Partial<AnnotationElement>;
+}
+
+export interface DeleteAnnotationInput {
+  id: string;
+}
+
 export interface FocusInput {
   nodeId: string;
 }
@@ -92,7 +118,10 @@ export type CanvasToolCall =
   | { name: "setStyle"; input: SetStyleInput }
   | { name: "flow"; input: FlowInput }
   | { name: "focus"; input: FocusInput }
-  | { name: "narrate"; input: NarrateInput };
+  | { name: "narrate"; input: NarrateInput }
+  | { name: "annotate"; input: AnnotateInput }
+  | { name: "updateAnnotation"; input: UpdateAnnotationInput }
+  | { name: "deleteAnnotation"; input: DeleteAnnotationInput };
 
 // ---------------------------------------------------------------------------
 // 出参
@@ -147,6 +176,12 @@ export function executeTool(ctx: ToolContext, call: CanvasToolCall): ToolResult 
       return focus(ctx, call.input);
     case "narrate":
       return narrate(ctx, call.input);
+    case "annotate":
+      return annotate(ctx, call.input);
+    case "updateAnnotation":
+      return updateAnnotation(ctx, call.input);
+    case "deleteAnnotation":
+      return deleteAnnotation(ctx, call.input);
   }
 }
 
@@ -162,6 +197,10 @@ export function applyPending(ctx: ToolContext, call: CanvasToolCall): ToolResult
       return moveNode(ctx, call.input, { force: true });
     case "deleteNode":
       return deleteNode(ctx, call.input, { force: true });
+    case "updateAnnotation":
+      return updateAnnotation(ctx, call.input, { force: true });
+    case "deleteAnnotation":
+      return deleteAnnotation(ctx, call.input, { force: true });
     default:
       // 其它工具本来就不需要确认
       return executeTool(ctx, call);
@@ -374,8 +413,85 @@ function narrate(ctx: ToolContext, input: NarrateInput): ToolResult {
   ]);
 }
 
-/** 把一批工具调用的风险汇总，供 UI 决定是否要弹确认 */
-export function summarizeRisk(results: ToolResult[]): RiskLevel {
+// ---------------------------------------------------------------------------
+// Annotation 类工具（PRD/知识模型.md §2.3）
+// ---------------------------------------------------------------------------
+
+let annotationSeq = 0;
+
+function nextAnnotationId(): string {
+  annotationSeq += 1;
+  return `anno-${Date.now().toString(36)}-${annotationSeq}`;
+}
+
+const isHumanAnnotation = (annotation: Annotation): boolean =>
+  annotation.provenance?.origin === "human";
+
+function annotate(ctx: ToolContext, input: AnnotateInput): ToolResult {
+  if (!input.element || typeof input.element !== "object") {
+    return fail("annotate 需要 element");
+  }
+  const { x, y, width, height } = input.element;
+  if ([x, y, width, height].some((value) => typeof value !== "number")) {
+    return fail("annotate 的 element 需要数值 x/y/width/height");
+  }
+  if (input.attachedTo && !readNode(ctx.doc, input.attachedTo)) {
+    return fail(`要挂的节点不存在：${input.attachedTo}`);
+  }
+
+  const id = input.id?.trim() || nextAnnotationId();
+  upsertAnnotation(ctx.doc, {
+    id,
+    type: input.type,
+    ...(input.attachedTo ? { attachedTo: input.attachedTo } : {}),
+    element: input.element,
+    ...(input.text ? { text: input.text } : {}),
+    provenance: { origin: "ai", at: Date.now() },
+  });
+
+  return done(input.text ? `已添加便签「${input.text}」` : "已添加标注", "add");
+}
+
+function updateAnnotation(
+  ctx: ToolContext,
+  input: UpdateAnnotationInput,
+  opts: { force?: boolean } = {},
+): ToolResult {
+  const existing = readAnnotation(ctx.doc, input.id);
+  if (!existing) return fail(`注释不存在：${input.id}`, "mutate");
+
+  if (isHumanAnnotation(existing) && !opts.force) {
+    return hold({ name: "updateAnnotation", input }, "这条标注是你画的，要改吗？", "mutate");
+  }
+
+  upsertAnnotation(ctx.doc, {
+    ...existing,
+    ...(input.text !== undefined ? { text: input.text } : {}),
+    element: input.element ? { ...existing.element, ...input.element } : existing.element,
+    provenance: { origin: "ai", at: Date.now() },
+  });
+
+  return done("已更新标注", "mutate");
+}
+
+function deleteAnnotation(
+  ctx: ToolContext,
+  input: DeleteAnnotationInput,
+  opts: { force?: boolean } = {},
+): ToolResult {
+  const existing = readAnnotation(ctx.doc, input.id);
+  if (!existing) return fail(`注释不存在：${input.id}`, "destructive");
+
+  // 权限边界：不删人画的标注，除非用户明确要求
+  if (isHumanAnnotation(existing) && !opts.force) {
+    return hold({ name: "deleteAnnotation", input }, "这条标注是你画的，要删吗？", "destructive");
+  }
+
+  removeAnnotation(ctx.doc, input.id);
+  return done("已删除标注", "destructive");
+}
+
+/** 把一批工具调用的风险汇总，供 UI 决定是否要弹确认 */export function summarizeRisk(results: ToolResult[]): RiskLevel {
   if (results.some((r) => r.risk === "destructive" && !r.applied)) return "destructive";
   if (results.some((r) => r.risk === "mutate" && !r.applied)) return "mutate";
   return "add";
