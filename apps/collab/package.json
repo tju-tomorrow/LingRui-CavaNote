@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "bun build src/server.ts --target=node --outfile=dist/server.js",
-    "dev": "bun run build && node --watch dist/server.js",
-    "start": "bun run build && node dist/server.js"
+    "dev": "bun run build && node --env-file-if-exists=.env --watch dist/server.js",
+    "start": "bun run build && node --env-file-if-exists=.env dist/server.js"
   },
   "dependencies": {
     "@hocuspocus/extension-database": "^4.7.0",

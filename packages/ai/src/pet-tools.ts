@@ -18,26 +18,89 @@ import {
 } from "@lingrui/knowledge";
 
 /** 工具描述表：给 LLM 看的能力清单 */
+/**
+ * 宠物工具表。
+ * params 与 CANVAS_TOOLS 同构：直接作为 OpenAI function parameters 发给模型。
+ * 不给 schema 时模型会自己编字段名（实测），所以每个都必须写清。
+ */
 export const PET_TOOLS = {
   createPet: {
     description: "创建一只属于用户的宠物（讲解老师），并设为当前宠物",
     when: "当用户想养一只新宠物 / 想要一个讲解伙伴时",
+    params: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        id: { type: "string", description: "省略则由名字生成" },
+        name: { type: "string", description: "宠物名字，如「猫老师」" },
+        form: { type: "string", enum: ["pixel", "vrm", "ascii"], description: "默认 pixel" },
+        palette: {
+          type: "array",
+          items: { type: "string" },
+          description: "主色调（hex），如 [\"#5b8def\", \"#8fb8ff\"]",
+        },
+        seed: { type: "number", description: "像素形象随机种子" },
+        tone: { type: "string", description: "讲解口吻，如 friendly / rigorous / funny" },
+      },
+    },
   },
   setPetAppearance: {
     description: "修改宠物的外观：名字、调色板、像素缩放",
     when: "当用户想换皮 / 改名 / 换颜色时",
+    params: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "宠物 id" },
+        name: { type: "string" },
+        palette: { type: "array", items: { type: "string" } },
+        seed: { type: "number" },
+        scale: { type: "number" },
+      },
+    },
   },
   setPetPersonality: {
     description: "修改宠物的讲解口吻与语言",
     when: "当用户想换语气 / 风格时",
+    params: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        tone: { type: "string", description: "friendly / rigorous / funny…" },
+        lang: { type: "string", description: "语言，如 zh-CN" },
+      },
+    },
   },
   importPet: {
     description: "导入外部宠物规格（Codex sprite / Petdex）",
     when: "当用户想用现成宠物时",
+    params: {
+      type: "object",
+      required: ["spec"],
+      properties: {
+        spec: {
+          type: "object",
+          required: ["id", "name"],
+          properties: {
+            id: { type: "string" },
+            name: { type: "string" },
+            form: { type: "string", enum: ["pixel", "vrm", "ascii"] },
+            palette: { type: "array", items: { type: "string" } },
+            source: { type: "object", description: "来源标记（gallery / format）" },
+          },
+        },
+      },
+    },
   },
   deletePet: {
     description: "删除某只宠物",
     when: "当用户不要某只宠物时",
+    params: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } },
+    },
   },
 } as const;
 

@@ -33,31 +33,52 @@ bun run dev
 
 That's it — with **no collab server and no LLM**, data persists to local IndexedDB and the built-in local explainer does the teaching. Zero configuration to try the core experience.
 
-### Want multi-user collaboration?
+### Want multi-user collaboration + a real LLM?
 
 ```bash
-# Start local dependencies (Postgres / Valkey / MinIO)
+# 1. Start local dependencies (Postgres 17 / Valkey 8 / MinIO)
 docker compose up -d
 
-# Configure and start the collab server
+# 2. Configure the collab server
 cp apps/collab/.env.example apps/collab/.env
+
+# 3. Mint a local dev JWT (the collab server requires a token) into apps/web/.env
+node scripts/dev-token.mjs
+#   apps/web/.env:
+#     VITE_COLLAB_URL=ws://localhost:1234
+#     VITE_COLLAB_TOKEN=<token from the step above>
+#     VITE_CHAT_API=/api/chat
+
+# 4. Start the collab server (it reads apps/collab/.env automatically)
 bun run dev:collab
 ```
 
-Then point `VITE_COLLAB_URL` to the collab server in `apps/web/.env` (copy from `apps/web/.env.example`).
+Verify: open two browser windows — edits on one should appear on the other immediately;
+restart the server and the content is still there (Yjs snapshots live in Postgres,
+table `yjs_documents`).
 
 ### Plug in a real LLM
 
-Any OpenAI-compatible backend works (OpenAI / DeepSeek / Groq / Ollama / vLLM…):
+Any **OpenAI-compatible** backend works (OpenAI / DeepSeek / Groq / Ollama / vLLM…):
 
 ```bash
-# Fill these in apps/collab/.env
+# apps/collab/.env
 OPENAI_API_KEY=sk-...
 OPENAI_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4o-mini
 ```
 
-Leave them blank and the app gracefully falls back to the local explainer.
+**opencode-go** (its gateway speaks both Anthropic and OpenAI-compatible APIs; we use the latter):
+
+```bash
+bash scripts/dev-collab-oc.sh                   # key is read from ~/.local/share/opencode/auth.json
+bash scripts/dev-collab-oc.sh deepseek-v4-pro   # optionally pick a model
+```
+
+Leave it blank and `/api/chat` returns 503 — the app gracefully falls back to the local explainer.
+
+> If Docker Hub is unreachable, pull from a mirror and re-tag, e.g.
+> `docker pull docker.m.daocloud.io/valkey/valkey:8-alpine && docker tag … valkey/valkey:8-alpine`
 
 ### Desktop app (optional)
 

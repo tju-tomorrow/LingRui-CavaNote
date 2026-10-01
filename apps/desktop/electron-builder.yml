@@ -5,6 +5,12 @@ directories:
   output: release
   buildResources: build
 
+# bun workspace：node_modules/@lingrui/* 是 symlink，electron-builder 默认会遍历/重建，
+# 在 monorepo 里会卡在 packaging。这里全部关掉（依赖都是纯 JS，无需 rebuild）。
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+
 files:
   - out/**
   - package.json

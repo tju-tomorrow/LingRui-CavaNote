@@ -79,14 +79,21 @@ function cors(res: ServerResponse): void {
   res.setHeader("access-control-allow-methods", "POST, OPTIONS");
 }
 
-/** 把内部工具表转成 OpenAI tools 格式（画布 + 宠物） */
+/**
+ * 把内部工具表转成 OpenAI tools 格式（画布 + 宠物）。
+ *
+ * 关键：必须把每个工具的 `params`（JSON schema）原样发出去。
+ * 早先图省事只发 `additionalProperties: true`，结果模型只能猜字段名——
+ * 实测会发 `type` 而不是 `kind`、用 `x`/`y` 而不是 `at`，生成的节点全是坏的。
+ */
 function openAiTools() {
   return Object.entries({ ...CANVAS_TOOLS, ...PET_TOOLS }).map(([name, spec]) => ({
     type: "function" as const,
     function: {
       name,
       description: `${spec.description}（${spec.when}）`,
-      parameters: { type: "object", additionalProperties: true },
+      parameters:
+        (spec as { params?: unknown }).params ?? { type: "object", additionalProperties: true },
     },
   }));
 }

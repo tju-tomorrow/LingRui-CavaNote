@@ -33,22 +33,32 @@ bun run dev
 
 **零配置即可体验核心功能**：没有协同服务、没有 LLM 时，数据存本地 IndexedDB，由内置的本地讲解器负责讲解。
 
-### 需要多人协同时
+### 需要多人协同 + 真实 LLM 时
 
 ```bash
-# 启动本地依赖服务（Postgres / Valkey / MinIO）
+# 1. 启动依赖服务（Postgres 17 / Valkey 8 / MinIO）
 docker compose up -d
 
-# 配置并启动协同服务
+# 2. 配置协同服务
 cp apps/collab/.env.example apps/collab/.env
+
+# 3. 铸一个本地开发 JWT（协同服务要求 token），写进 apps/web/.env
+node scripts/dev-token.mjs
+#   apps/web/.env:
+#     VITE_COLLAB_URL=ws://localhost:1234
+#     VITE_COLLAB_TOKEN=<上一步输出的 token>
+#     VITE_CHAT_API=/api/chat
+
+# 4. 启动协同服务（会自动读 apps/collab/.env）
 bun run dev:collab
 ```
 
-再在 `apps/web/.env`（可拷 `apps/web/.env.example`）里把 `VITE_COLLAB_URL` 指向协同服务。
+验证：开两个浏览器窗口，一边改画布另一边应立刻跟着动；改完重启服务端，内容仍在
+（Yjs 快照存在 Postgres 的 `yjs_documents` 表）。
 
 ### 接真实 LLM
 
-任意 OpenAI 兼容后端都可以（OpenAI / DeepSeek / Groq / Ollama / vLLM…）：
+任意 **OpenAI 兼容**后端都可以（OpenAI / DeepSeek / Groq / Ollama / vLLM…）：
 
 ```bash
 # 在 apps/collab/.env 里填写
@@ -57,7 +67,17 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4o-mini
 ```
 
-不填时前端自动降级到本地讲解器，功能依然可用。
+**opencode-go**（网关同时提供 Anthropic 与 OpenAI 兼容两种形态，我们用后者）：
+
+```bash
+bash scripts/dev-collab-oc.sh                   # key 从 ~/.local/share/opencode/auth.json 读，不另存
+bash scripts/dev-collab-oc.sh deepseek-v4-pro   # 也可指定模型
+```
+
+不填时 `/api/chat` 返回 503，前端自动降级到本地讲解器，功能依然可用。
+
+> 国内网络拉不到 Docker Hub 时，用镜像源拉完再打回原名，例如：
+> `docker pull docker.m.daocloud.io/valkey/valkey:8-alpine && docker tag … valkey/valkey:8-alpine`
 
 ### 桌面端（可选）
 
