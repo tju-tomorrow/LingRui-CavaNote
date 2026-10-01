@@ -13,6 +13,7 @@ export type MascotState = "idle" | "run" | "talk" | "point" | "think";
 
 export type Action =
   | { t: number; kind: "node.spawn"; nodeId: string; at: Vec2 }
+  | { t: number; kind: "node.remove"; nodeId: string }
   | { t: number; kind: "node.focus"; nodeId: string }
   | { t: number; kind: "node.state"; nodeId: string; to: string }
   | { t: number; kind: "edge.connect"; from: string; to: string; label?: string }
@@ -110,6 +111,14 @@ export function sampleAt(script: SceneScript, t: number): SceneState {
           at: a.at,
           appear: easeOutCubic(local / DURATION.spawn),
         });
+        break;
+
+      case "node.remove":
+        state.nodes.delete(a.nodeId);
+        for (const [key, edge] of state.edges) {
+          if (edge.from === a.nodeId || edge.to === a.nodeId) state.edges.delete(key);
+        }
+        if (state.focus === a.nodeId) state.focus = null;
         break;
 
       case "node.state": {

@@ -15,15 +15,35 @@
 import type { NodeKind } from "@lingrui/knowledge";
 import type { CanvasToolCall } from "./executor";
 
-/** 工具描述表：给 LLM 看的能力清单 */
+/** 工具描述表：给 LLM 看的能力清单（ADR-0011 §5） */
 export const CANVAS_TOOLS = {
   spawnNode: {
     description: "在画布上生成一个基建实体节点，并写入 Knowledge 层",
     when: "当讲解需要引入新实体时",
   },
+  updateNode: {
+    description: "修改节点的标题 / 摘要 / 类型",
+    when: "当要纠正或细化已有节点时",
+  },
+  moveNode: {
+    description: "把节点挪到指定坐标",
+    when: "当布局拥挤或需要重新分层时",
+  },
+  deleteNode: {
+    description: "删除节点及其所有连线",
+    when: "当确认某个实体不再相关时",
+  },
   connect: {
     description: "在两个节点之间建立带语义的关系（calls/reads/writes/publishes…）",
     when: "当要说明谁调用谁、谁读写谁时",
+  },
+  disconnect: {
+    description: "断开两个节点之间的关系",
+    when: "当某条链路不再成立时",
+  },
+  setStyle: {
+    description: "设置节点的视觉样式（颜色、图标等）",
+    when: "当要用颜色区分层次或强调某个节点时",
   },
   flow: {
     description: "播放一段从 A 到 B 的数据流动画",
@@ -42,6 +62,16 @@ export const CANVAS_TOOLS = {
 export type CanvasToolName = keyof typeof CANVAS_TOOLS;
 
 export const TOOL_NAMES = Object.keys(CANVAS_TOOLS) as CanvasToolName[];
+
+export const WRITE_TOOLS: CanvasToolName[] = [
+  "spawnNode",
+  "updateNode",
+  "moveNode",
+  "deleteNode",
+  "connect",
+  "disconnect",
+  "setStyle",
+];
 
 /** 把 LLM 返回的 tool 调用转成内部可执行的形状（含最小校验） */
 export function toCanvasToolCall(

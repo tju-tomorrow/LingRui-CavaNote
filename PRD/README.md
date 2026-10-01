@@ -1,0 +1,39 @@
+# PRD 索引 · LingRui Scribe
+
+> 主界面图：`PRD/主界面.png`
+
+## 文档
+
+| 文档 | 内容 | 阶段 |
+|---|---|---|
+| [主界面.md](./主界面.md) | 共编闭环 + 逐区盘点 + 交互规格 v1 + 验收 | 全阶段 |
+| [知识模型.md](./知识模型.md) | `KnowledgeNode` 扩字段 + `Annotation` + Y.Doc schema + `CanvasSnapshot` | P1.6 |
+| [演出层.md](./演出层.md) | 时间轴 / 分镜 / 吉祥物 / 笔记进度 / seek 四联动 | P2 |
+| [导出与分发.md](./导出与分发.md) | 视频 / 文档导出、保存、分享、Orama 搜索 | P4 |
+| [桌面端.md](./桌面端.md) | Electron vs Tauri 决策 + 打包架构 | 交付形态 |
+
+## 架构决策
+
+见 `docs/adr/`。与本 PRD 直接相关：
+
+- **ADR-0011**：AI × 人 共编画布（增量 patch + 截图/数据回灌）—— 取代 ADR-0009 的整体重建。
+- **ADR-0010**：协同服务跑 Node + LLM 代理 NDJSON 协议。
+- ADR-0009：画布派生/重建（决策 2/3 已被 ADR-0011 取代，工程发现仍有效）。
+
+## 分期
+
+| 阶段 | 目标 |
+|---|---|
+| P0 ✅ | 文档 ⟷ 画布共享一份 Knowledge |
+| P1.5 | 主界面壳（导航 / 笔记树 / 主标题区 / 节点图标） |
+| P1.6 | 共编基座（Annotation + provenance + 增量 patch + 节点详情卡） |
+| P2 | 演出层（时间轴 + 分镜 + 进度 + 吉祥物占位） |
+| P3 | AI 编排（真实 LLM + 工具 + Context Packer + 追问落盘） |
+| P4 | 落盘/分发（视频 / 文档导出 + 分享 + 搜索） |
+
+## 协作边界（多 session）
+
+- **文档侧**（`PRD/`、`docs/`）：本 PRD 集由文档 session 维护。
+- **代码侧**（`packages/ai`、`apps/collab`、`apps/web`、`packages/knowledge`）：
+  由实现 session 推进；其决策见 ADR-0010。
+- 实现 P1.6 前，请先读 **ADR-0011** 与 `知识模型.md`，避免沿用 ADR-0009 的整体重建。

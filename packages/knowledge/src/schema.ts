@@ -46,6 +46,18 @@ export interface CanvasBinding {
 
 export type NodeId = string;
 
+/**
+ * 来源标记（ADR-0011）：谁改的这个元素。
+ * - `origin`：AI 还是人
+ * - `dirty`：人在上一次 AI 交互之后改过它
+ */
+export interface Provenance {
+  origin: "ai" | "human";
+  dirty?: boolean;
+  /** 最后一次改动的时间戳（毫秒） */
+  at?: number;
+}
+
 export interface KnowledgeNode {
   id: NodeId;
   kind: NodeKind;
@@ -57,6 +69,8 @@ export interface KnowledgeNode {
   /** 画布视图里的元素绑定 */
   canvas?: CanvasBinding;
   relations: Relation[];
+  /** 来源标记 */
+  provenance?: Provenance;
   /** 自由元数据（技术栈、标签、外部链接…） */
   meta?: Record<string, unknown>;
 }
@@ -175,4 +189,30 @@ export function nodeIdByCanvasElement(doc: Y.Doc, elementId: string): NodeId | u
     if (node.canvas?.elementId === elementId) return id;
   }
   return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// provenance（ADR-0011）
+// ---------------------------------------------------------------------------
+
+/** 标记为人改过。人一旦改过，AI 就不该默默覆盖它。 */
+export function markHuman(doc: Y.Doc, id: NodeId): void {
+  const node = readNode(doc, id);
+  if (!node) return;
+  upsertNode(doc, {
+    ...node,
+    provenance: { origin: "human", dirty: true, at: Date.now() },
+  });
+}
+
+/** 标记为 AI 生成 */
+export function markAi(doc: Y.Doc, id: NodeId): void {
+  const node = readNode(doc, id);
+  if (!node) return;
+  upsertNode(doc, { ...node, provenance: { origin: "ai", at: Date.now() } });
+}
+
+/** 人在 AI 之后改过吗 */
+export function isHumanOwned(node: KnowledgeNode | undefined): boolean {
+  return node?.provenance?.origin === "human";
 }

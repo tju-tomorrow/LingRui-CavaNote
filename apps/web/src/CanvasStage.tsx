@@ -1,11 +1,16 @@
 /**
  * 画布视图
  *
- * 演示本产品的核心命题：**同一份 KnowledgeNode，文档视图和画布视图共享**。
- * 节点来自 Y.Doc（collab/useKnowledge），位置属于"表现"（存在 Y.Doc 的 layout map 里）。
+ * 本产品的核心命题：**同一份 KnowledgeNode，文档视图和画布视图共享**。
+ * 节点来自 Y.Doc（collab/useKnowledge），位置存在 Y.Doc 的 layout map。
  *
  * 边界（ADR-0003）：Excalidraw 只是渲染器。元素的 customData.nodeId 回指 Knowledge，
  * 正文永远不在这里。
+ *
+ * 同步策略（ADR-0011 决策 2）：**增量 patch，禁止整体重建**。
+ *   - 每轮只 diff 出新增/修改/删除的元素，最小化改动（packages/canvas/src/scene-diff.ts）
+ *   - 用户手绘原样保留
+ *   - 人在画布上的改动会写回 Knowledge 并标 provenance=human
  */
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import {
@@ -16,22 +21,25 @@ import {
 import "@excalidraw/excalidraw/index.css";
 import type { KnowledgeNode } from "@lingrui/knowledge";
 import {
-  isLingRuiElement,
+  diffScene,
   nodeIdOf,
   nodeToExcalidrawElement,
   relationToArrow,
+  type DiffableElement,
   type ElementSkeleton,
 } from "@lingrui/canvas";
+import { markHuman } from "@lingrui/knowledge";
 import { useKnowledgeNodes, useKnowledgeLayout } from "./collab/useKnowledge";
 import { NODE_SIZE, type NodeLayout } from "./collab/seed";
 import { setNodePosition } from "./collab/layout";
+import { ydoc } from "./collab/doc";
 import { setFocus } from "./state/focus";
 
 type ExcalidrawProps = ComponentProps<typeof Excalidraw>;
 type ExcalidrawAPI = NonNullable<Parameters<NonNullable<ExcalidrawProps["excalidrawAPI"]>>[0]>;
 type SceneElement = ReturnType<ExcalidrawAPI["getSceneElements"]>[number];
 
-/** 场景指纹：Knowledge 内容或布局变了就要重画 */
+/** 场景指纹：Knowledge 内容或布局变了就重算期望元素 */
 function fingerprint(nodes: KnowledgeNode[], layout: NodeLayout): string {
   return nodes
     .map((n) => {
@@ -63,7 +71,6 @@ function buildSkeletons(nodes: KnowledgeNode[], layout: NodeLayout): ElementSkel
 
   for (const node of nodes) {
     for (const rel of node.relations) {
-      // 目标节点还不在画布上就跳过，等它出现再画线
       if (!known.has(rel.to)) continue;
       out.push(
         relationToArrow(
@@ -87,42 +94,53 @@ export function CanvasStage() {
   const nodes = useKnowledgeNodes();
   const layout = useKnowledgeLayout();
 
-  // 用 state 而不是 ref：StrictMode 下 excalidrawAPI 回调可能晚于 effect 执行，
-  // 用 ref 会拿到已卸载的旧实例，updateScene 打到一个看不见的 scene 上。
   const [api, setApi] = useState<ExcalidrawAPI | null>(null);
   const fittedRef = useRef(false);
   const draggingRef = useRef(false);
 
-  const converted = useMemo(() => {
+  const desired = useMemo(() => {
     if (nodes.length === 0) return null;
     const raw = convertToExcalidrawElements(
       buildSkeletons(nodes, layout) as unknown as Parameters<typeof convertToExcalidrawElements>[0],
+      // 关键：默认会 regenerateIds，把我们算好的稳定 id（el-<nodeId> / edge-…）全换成随机值，
+      // 增量 diff 就再也认不出"同一个元素"了（ADR-0011 要求元素可寻址）。
+      { regenerateIds: false },
     );
-    // 关键：convertToExcalidrawElements 会额外生成标签文本元素，它们**不会**继承
-    // 我们写在 skeleton 上的 customData。不把它们也标成自己的，就会被当成
-    // "用户手绘"，每次重建都累积一层。
+    // convertToExcalidrawElements 生成的标签文本元素不继承 skeleton 上的 customData，
+    // 不把它们标成自己的就会被当成"用户手绘"并逐轮累积。
     return raw.map((el) => ({
       ...el,
       customData: { ...(el.customData as object | undefined), lingrui: true },
     }));
-    // 故意用指纹而不是 nodes/layout 对象：避免同内容不同引用导致重画
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fingerprint(nodes, layout)]);
 
   useEffect(() => {
-    if (!api || !converted) return;
+    if (!api || !desired) return;
 
-    // 只替换"我们自己的"元素，用户手绘的内容原样保留
-    const foreign = api
-      .getSceneElements()
-      .filter((el: SceneElement) => !isLingRuiElement(el));
+    const current = api.getSceneElements();
+    // Excalidraw 的元素联合类型与 DiffableElement 结构一致，只是字段可选性不同
+    const { elements } = diffScene(
+      current as unknown as DiffableElement[],
+      desired as unknown as DiffableElement[],
+    );
 
     api.updateScene({
-      elements: [...converted, ...foreign],
-      // Excalidraw 0.18 引入了 Store：不显式声明 captureUpdate 时，
-      // 场景改动会被下次 commit 覆盖回去（表现为"数据在、画面空"）。见 ADR-0009。
+      elements: elements as unknown as SceneElement[],
+      // Excalidraw 0.18 的 Store：不显式声明 captureUpdate 时改动会被下次 commit 覆盖
+      // （表现为"数据在、画面空"）。见 ADR-0009。
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
+
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>)["__canvasSync"] = {
+        apiId: api.id,
+        desired: desired.length,
+        before: current.length,
+        sent: elements.length,
+        sceneAfter: api.getSceneElements().length,
+      };
+    }
 
     if (!fittedRef.current) {
       fittedRef.current = true;
@@ -130,7 +148,7 @@ export function CanvasStage() {
         api.scrollToContent(undefined, { fitToContent: true, animate: false });
       });
     }
-  }, [api, converted]);
+  }, [api, desired]);
 
   return (
     <div className="excalidraw-host">
@@ -144,12 +162,14 @@ export function CanvasStage() {
           }
         }}
         onChange={(elements, appState) => {
-          // 只在拖动结束时把位置写回 Knowledge 层，避免 onChange 与场景重建互相触发
+          // 拖动结束：位置写回 layout，并把节点标记为人改过（ADR-0011 provenance）
           const dragging = appState.selectedElementsAreBeingDragged;
           if (draggingRef.current && !dragging) {
             for (const el of elements) {
               const nodeId = nodeIdOf(el);
-              if (nodeId) setNodePosition(nodeId, el.x, el.y);
+              if (!nodeId) continue;
+              setNodePosition(nodeId, el.x, el.y);
+              markHuman(ydoc, nodeId);
             }
           }
           draggingRef.current = dragging;
