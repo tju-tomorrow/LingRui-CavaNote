@@ -9,7 +9,7 @@
  */
 import { executeTool, plan, toCanvasToolCall, type ToolResult } from "@lingrui/ai";
 import { getNodes } from "@lingrui/knowledge";
-import type { Action } from "@lingrui/anim";
+import { deriveShots, type Action } from "@lingrui/anim";
 import { ydoc } from "../collab/doc";
 import { layoutSnapshot } from "../collab/layout";
 import { NODE_SIZE } from "../collab/seed";
@@ -37,6 +37,12 @@ function applyToolResult(result: ToolResult): string {
   return result.ok ? `\n\n⚙ ${result.message}` : `\n\n（${result.message}）`;
 }
 
+/** 从当前动作流推导分镜（缩略图用） */
+function shotsOf() {
+  const nodes = getNodes(ydoc);
+  return deriveShots(timeline, (id) => nodes.get(id)?.title);
+}
+
 /** 执行一次画布工具调用，返回给用户看的短句 */
 export function runToolCall(name: string, input: unknown): string {
   const call = toCanvasToolCall(name, input);
@@ -54,7 +60,7 @@ export function runToolCall(name: string, input: unknown): string {
   }
   const message = applyToolResult(result);
   // 本轮从 startT 起自动播放（让宠物真地演一遍）
-  if (result.ok) player.load(exportedTimeline(), "AI 演出", startT);
+  if (result.ok) player.load(exportedTimeline(), "AI 演出", startT, shotsOf());
   return message;
 }
 
@@ -104,7 +110,7 @@ export function runAgent(message: string): AgentTurn {
   cursor += 2;
 
   // 本轮产生了动作 → 装载时间轴并从本轮起点自动播放
-  if (toolResults.some((r) => r.ok)) player.load(exportedTimeline(), "AI 演出", startT);
+  if (toolResults.some((r) => r.ok)) player.load(exportedTimeline(), "AI 演出", startT, shotsOf());
 
   // 把工具做了什么（含"需要你确认"）回显给用户
   const reply = (p.reply || buildReply(message, getFocus())) + notes.join("");

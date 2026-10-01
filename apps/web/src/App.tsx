@@ -16,6 +16,7 @@ import type { JSX } from "react";
 import { useEffect } from "react";
 import { NoteEditor } from "./NoteEditor";
 import { CanvasStage } from "./CanvasStage";
+import { GhostOverlay } from "./canvas/GhostOverlay";
 import { ChatPanel } from "./chat/ChatPanel";
 import { useKnowledgeNodes } from "./collab/useKnowledge";
 import { revealNode } from "./editor/bridge";
@@ -71,6 +72,8 @@ export function App(): JSX.Element {
 
         <section className="pane canvas">
           <CanvasStage />
+          {/* 三级保险：把待确认的破坏类补丁在画布上就地标出来 */}
+          <GhostOverlay />
         </section>
 
         <TimelineBar />

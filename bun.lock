@@ -119,6 +119,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@lingrui/anim": "workspace:*",
+        "@lingrui/knowledge": "workspace:*",
       },
       "peerDependencies": {
         "@pixiv/three-vrm": "^3.5.5",

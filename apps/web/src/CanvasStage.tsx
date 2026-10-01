@@ -42,7 +42,7 @@ import { useAnnotations, useKnowledgeLayout, useKnowledgeNodes } from "./collab/
 import { NODE_SIZE, type NodeLayout } from "./collab/seed";
 import { setNodePosition } from "./collab/layout";
 import { ydoc } from "./collab/doc";
-import { registerCanvas } from "./canvas/bridge";
+import { registerCanvas, bumpCanvasVersion } from "./canvas/bridge";
 import { setFocus } from "./state/focus";
 
 type ExcalidrawProps = ComponentProps<typeof Excalidraw>;
@@ -201,6 +201,9 @@ export function CanvasStage() {
           }
         }}
         onChange={(elements, appState) => {
+          // ghost 预览靠它跟随视口
+          bumpCanvasVersion();
+
           // ---- 场景 → Y.Doc：用户画的东西落成 Annotation ----
           // 靠 sameAnnotation 做幂等，天然不会自激循环
           const plan = planAnnotationSync(

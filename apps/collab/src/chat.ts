@@ -12,7 +12,7 @@
  *   {"type":"done"}                               结束
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { CANVAS_TOOLS, SYSTEM_PROMPT } from "@lingrui/ai";
+import { CANVAS_TOOLS, PET_TOOLS, SYSTEM_PROMPT } from "@lingrui/ai";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -79,9 +79,9 @@ function cors(res: ServerResponse): void {
   res.setHeader("access-control-allow-methods", "POST, OPTIONS");
 }
 
-/** 把内部工具表转成 OpenAI tools 格式 */
+/** 把内部工具表转成 OpenAI tools 格式（画布 + 宠物） */
 function openAiTools() {
-  return Object.entries(CANVAS_TOOLS).map(([name, spec]) => ({
+  return Object.entries({ ...CANVAS_TOOLS, ...PET_TOOLS }).map(([name, spec]) => ({
     type: "function" as const,
     function: {
       name,

@@ -92,6 +92,14 @@ export interface PetToolResult {
   pet?: PetSpec;
 }
 
+/** 把 LLM / planner 的工具调用转成可执行形状（参数校验在 executePetTool 里） */
+export function toPetToolCall(name: string, input: unknown): PetToolCall | { error: string } {
+  if (!PET_TOOL_NAMES.includes(name as PetToolName)) {
+    return { error: `未知宠物工具：${name}` };
+  }
+  return { name: name as PetToolName, input } as PetToolCall;
+}
+
 // ---------------------------------------------------------------------------
 // 调色板工具
 // ---------------------------------------------------------------------------
@@ -265,7 +273,7 @@ export function planPet(message: string, ctx: { hasPets: boolean }): PetPlan {
   const text = message.trim();
   if (!text) return { calls: [], reply: "" };
 
-  const wantsPet = /(宠物|养|老师|伙伴|伴读)/.test(text);
+  const wantsPet = /(宠物|养一|养只|养个|当老师|讲解老师|伴读|伙伴)/.test(text);
   if (!wantsPet) return { calls: [], reply: "" };
 
   const named = /叫\s*([^\s，。,.!！?？的]+)/.exec(text)?.[1]?.trim();

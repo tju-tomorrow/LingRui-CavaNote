@@ -108,7 +108,7 @@ export function PetLayer(): JSX.Element | null {
       style={{
         position: "fixed",
         right: 20,
-        bottom: 84,
+        bottom: 176,
         zIndex: 20,
         display: "flex",
         flexDirection: "column",
