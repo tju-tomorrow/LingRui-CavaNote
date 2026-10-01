@@ -70,6 +70,38 @@ export const IconSettings = (p: IconProps): JSX.Element => (
   </Svg>
 );
 
+/* ---------- 笔记树 ---------- */
+/** 单篇笔记 */
+export const IconNote = (p: IconProps): JSX.Element => (
+  <Svg {...p}>
+    <path d="M6 3.5h7L18 8.5v12H6z" />
+    <path d="M12.8 3.6v5h5" />
+  </Svg>
+);
+
+/** 分组（文件夹） */
+export const IconFolder = (p: IconProps): JSX.Element => (
+  <Svg {...p}>
+    <path d="M3.5 6.5a2 2 0 0 1 2-2h3.3l2 2.4h5.2a2 2 0 0 1 2 2v8.6a2 2 0 0 1-2 2H5.5a2 2 0 0 1-2-2z" />
+  </Svg>
+);
+
+/** 折叠箭头（默认指右，展开时 CSS 转 90°） */
+export const IconChevron = (p: IconProps): JSX.Element => (
+  <Svg {...p}>
+    <path d="M9.5 6l6 6-6 6" />
+  </Svg>
+);
+
+/** 更多 */
+export const IconMore = (p: IconProps): JSX.Element => (
+  <Svg {...p}>
+    <circle cx="5" cy="12" r="1.5" />
+    <circle cx="12" cy="12" r="1.5" />
+    <circle cx="19" cy="12" r="1.5" />
+  </Svg>
+);
+
 export const IconSun = (p: IconProps): JSX.Element => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="4" />

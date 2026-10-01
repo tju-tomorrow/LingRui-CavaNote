@@ -22,8 +22,14 @@ import { PetLayer } from "./pet/PetLayer";
 import { TimelineBar } from "./timeline/TimelineBar";
 import { SubtitleBar } from "./timeline/SubtitleBar";
 import { hydrateTimeline } from "./chat/agent";
+import { ShortcutsOverlay } from "./shell/ShortcutsOverlay";
+import { isTypingTarget } from "./shell/shortcuts";
+import { toast } from "./shell/actions";
+import { saveSnapshot } from "./shell/snapshot";
+import { redoRound, undoRound } from "./state/history";
+import { player } from "./state/player";
 import { useFocus } from "./state/focus";
-import { setView as setShellView, useView } from "./state/view";
+import { setView as setShellView, useView, type ShellView } from "./state/view";
 import { useActiveNote, setActiveNote } from "./state/notes";
 import { useKnowledgeNotes } from "./collab/useKnowledge";
 import { useAuth } from "./auth/store";
@@ -51,6 +57,7 @@ export function App(): JSX.Element {
   const view = useView();
   const [present, setPresent] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [help, setHelp] = useState(false);
   const readOnly = useReadOnlyShare();
 
   // 画布选中节点 → 文档滚到对应的知识卡片
@@ -89,14 +96,78 @@ export function App(): JSX.Element {
     notes.find(isOpenableNote);
 
   // ⌘K / Ctrl+K 打开命令面板；Esc 退出面板与演示
+  // 全局键位（清单见 shell/shortcuts.ts，⌘/ 里有同样的表）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      const mod = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+
+      // 输入中：只保留「搜」「帮助」「退出」这三个不干扰打字的
+      if (isTypingTarget(e.target)) {
+        if (mod && key === "k") {
+          e.preventDefault();
+          setPalette((v) => !v);
+        } else if (mod && e.key === "/") {
+          e.preventDefault();
+          setHelp((v) => !v);
+        } else if (e.key === "Escape") {
+          setPalette(false);
+          setHelp(false);
+        }
+        return;
+      }
+
+      if (mod && key === "k") {
         e.preventDefault();
         setPalette((v) => !v);
-      } else if (e.key === "Escape") {
+        return;
+      }
+      if (mod && e.key === "/") {
+        e.preventDefault();
+        setHelp((v) => !v);
+        return;
+      }
+      if (mod && key === "s") {
+        e.preventDefault();
+        saveSnapshot();
+        toast("已保存快照（⌘S）");
+        return;
+      }
+      if (mod && key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redoRound();
+        else undoRound();
+        return;
+      }
+
+      // 下面这些不带修饰键
+      if (e.key === "Escape") {
         setPalette(false);
+        setHelp(false);
         setPresent(false);
+        return;
+      }
+      if (e.key === " ") {
+        // 空格：播放 / 暂停。别让页面滚动
+        e.preventDefault();
+        player.toggle();
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        player.nextShot();
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        player.prevShot();
+        return;
+      }
+      // 1–5 切视图
+      const views: ShellView[] = ["notes", "knowledge", "projects", "tags", "settings"];
+      const index = Number(e.key) - 1;
+      if (!mod && Number.isInteger(index) && index >= 0 && index < views.length) {
+        setShellView(views[index]!);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -157,6 +228,7 @@ export function App(): JSX.Element {
       </main>
 
       {palette ? <CommandPalette onClose={() => setPalette(false)} /> : null}
+      {help ? <ShortcutsOverlay onClose={() => setHelp(false)} /> : null}
       {readOnly ? <div className="readonly-banner">只读分享视图（本地演示）</div> : null}
       <PetLayer />
     </div>

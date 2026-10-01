@@ -121,6 +121,33 @@ export const player = {
     const next = times.find((x) => x > state.t + 0.01);
     player.seek(next ?? state.script.duration);
   },
+
+  /**
+   * 跳到下一个 / 上一个**分镜**（章节）。
+   *
+   * 比逐动作跳更符合「讲解」的心智模型：用户想听下一段，不是下一帧。
+   * 章节优先用 Y.Doc 里持久化的那份（可能被人工改过）。
+   */
+  nextShot(): void {
+    if (!state.script) return;
+    const shots = state.chapters.length > 0 ? state.chapters : [];
+    const next = shots.find((s) => s.startT > state.t + 0.01);
+    if (next) player.seek(next.startT);
+    else player.seek(state.script.duration);
+  },
+
+  prevShot(): void {
+    if (!state.script) return;
+    const shots = state.chapters;
+    // 当前分镜的头 1 秒内 → 退到上一段；否则先回到本段开头
+    const current = [...shots].reverse().find((s) => s.startT <= state.t + 0.01);
+    if (current && state.t - current.startT > 1) {
+      player.seek(current.startT);
+      return;
+    }
+    const prev = [...shots].reverse().find((s) => s.startT < state.t - 1.01);
+    player.seek(prev ? prev.startT : 0);
+  },
   setRate(rate: number): void {
     state = { ...state, rate };
     emit();

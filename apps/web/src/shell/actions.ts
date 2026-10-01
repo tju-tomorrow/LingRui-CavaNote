@@ -23,6 +23,37 @@ export function toast(message: string): void {
   }, 2200);
 }
 
+/** 带一个动作按钮的 toast（如「撤销」），6 秒后自动消失 */
+export function toastAction(message: string, actionLabel: string, onAction: () => void): void {
+  const el = document.createElement("div");
+  el.className = "lr-toast lr-toast-action";
+  const text = document.createElement("span");
+  text.textContent = message;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "lr-toast-btn";
+  btn.textContent = actionLabel;
+
+  let done = false;
+  const dismiss = () => {
+    el.classList.remove("in");
+    window.setTimeout(() => el.remove(), 200);
+  };
+  btn.addEventListener("click", () => {
+    if (done) return;
+    done = true;
+    onAction();
+    dismiss();
+  });
+
+  el.append(text, btn);
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("in"));
+  window.setTimeout(() => {
+    if (!done) dismiss();
+  }, 6000);
+}
+
 function timeLabel(at: number | null): string {
   if (!at) return "保存";
   return `已保存 ${new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;

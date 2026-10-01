@@ -1114,6 +1114,164 @@ html[data-glass="desktop"] .bn-container {
   letter-spacing: 0.5px;
 }
 
+/* 本轮改动清单（聊天面板里）*/
+.round-changes {
+  margin: 6px 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafaff;
+  overflow: hidden;
+}
+
+.round-changes-head {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 6px 10px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.round-changes ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 6px;
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.round-change {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.round-change:hover {
+  background: #f0f0ff;
+}
+
+.round-change-tool {
+  flex: none;
+  font-size: 10px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  min-width: 78px;
+}
+
+.round-change-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.round-change-flag {
+  flex: none;
+  font-size: 10px;
+  color: #b8860b;
+}
+
+.round-change.is-pending .round-change-label {
+  color: #b8860b;
+}
+
+/* 版本历史 */
+.lr-history {
+  width: 460px;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.history-badge {
+  flex: none;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: #e8f0ff;
+  color: #1d4ed8;
+}
+
+.history-badge.is-auto {
+  background: #f3f4f6;
+  color: var(--muted);
+}
+
+.history-time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-meta {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 快捷键帮助 */
+.lr-shortcuts {
+  width: 420px;
+}
+
+.lr-shortcuts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lr-shortcuts li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.lr-shortcuts kbd {
+  flex: none;
+  min-width: 72px;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 11px;
+  background: #f3f4f6;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
 /* 演出聚光灯：只靠一个超大 box-shadow 压暗四周 */
 .spotlight-layer {
   position: absolute;

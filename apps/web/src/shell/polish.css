@@ -638,6 +638,182 @@ body.col-resizing {
   background: rgba(255, 255, 255, 0.06);
 }
 
+/* ---------- 17. 笔记树交互（拖拽 / 右键 / 新建）---------- */
+.tree .tree-root {
+  min-height: 10px;
+}
+.tree .tree-branch {
+  display: contents;
+}
+.tree .tree-item {
+  position: relative;
+  cursor: default;
+  user-select: none;
+}
+.tree .tree-kind {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  margin-right: 1px;
+}
+.tree .tree-item.active .tree-kind {
+  color: var(--accent);
+}
+.tree .tree-twisty {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.12s, color 0.12s;
+}
+.tree .tree-twisty.open {
+  transform: rotate(90deg);
+}
+.tree .tree-twisty:hover {
+  color: var(--text);
+}
+.tree .tree-twisty-leaf {
+  width: 16px;
+}
+.tree .tree-note-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 拖拽落点提示 */
+.tree .tree-item.dragging {
+  opacity: 0.45;
+}
+.tree .tree-item.drop-before::before,
+.tree .tree-item.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.tree .tree-item.drop-before::before {
+  top: -1px;
+}
+.tree .tree-item.drop-after::after {
+  bottom: -1px;
+}
+.tree .tree-item.drop-inside {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.tree .tree-new {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.tree .tree-new:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-weak);
+}
+
+/* ---------- 18. 右键菜单 ---------- */
+.ctx-menu {
+  position: fixed;
+  z-index: 90;
+  min-width: 178px;
+  padding: 5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--sh-3);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+:root[data-theme="dark"] .ctx-menu {
+  background: #1f1f26;
+}
+.ctx-menu .ctx-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.ctx-menu .ctx-item:hover {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+.ctx-menu .ctx-item.danger {
+  color: #d64545;
+}
+.ctx-menu .ctx-item.danger:hover {
+  background: rgba(214, 69, 69, 0.12);
+  color: #d64545;
+}
+.ctx-menu .ctx-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ctx-menu .ctx-hint {
+  font-size: 10.5px;
+  font-family: inherit;
+  color: var(--muted);
+}
+.ctx-menu .ctx-item:hover .ctx-hint {
+  color: inherit;
+  opacity: 0.75;
+}
+
+/* ---------- 19. 带动作的 toast ---------- */
+.lr-toast-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 8px;
+}
+.lr-toast-btn {
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 11px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.lr-toast-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 /* ---------- 12. toast ---------- */
 .lr-toast {
   background: rgba(24, 24, 34, 0.94);

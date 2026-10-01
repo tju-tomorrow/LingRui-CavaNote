@@ -11,6 +11,7 @@ import { notePath, setNoteTags, type NoteMeta } from "@lingrui/knowledge";
 import { ydoc } from "../collab/doc";
 import { useNoteText } from "../collab/useKnowledge";
 import { useDocumentActions } from "./actions";
+import { HistoryPanel } from "./HistoryPanel";
 
 function readingMinutes(text: string): number {
   // 中文按字数算：300 字/分钟是常见的中文阅读速度
@@ -28,6 +29,7 @@ function formatDate(at: number): string {
 export function DocHeader({ note }: { note: NoteMeta }) {
   const { exportDoc, exportVideo, recording, save, share, savedLabel } = useDocumentActions();
   const [adding, setAdding] = useState(false);
+  const [history, setHistory] = useState(false);
 
   // 正文用订阅拿（打字会实时更新字数），分组路径与日期看 note 元信息
   const text = useNoteText(note);
@@ -93,8 +95,8 @@ export function DocHeader({ note }: { note: NoteMeta }) {
       </div>
 
       <div className="doc-actions">
-        <button className="dh-btn" type="button" disabled title="更多">
-          …
+        <button className="dh-btn" type="button" onClick={() => setHistory(true)} title="版本历史（⌘S 打点）">
+          历史
         </button>
         <button className="dh-btn" type="button" onClick={() => void exportDoc()} title="导出 Markdown">
           导出
@@ -115,6 +117,8 @@ export function DocHeader({ note }: { note: NoteMeta }) {
           {savedLabel}
         </button>
       </div>
+
+      {history ? <HistoryPanel onClose={() => setHistory(false)} /> : null}
     </div>
   );
 }

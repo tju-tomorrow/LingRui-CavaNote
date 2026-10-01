@@ -22,13 +22,14 @@ import { chunks, sleep, textOf } from "./text";
 import { remoteEnabled, streamRemote, type ChatMessage } from "./remote";
 import { freezeCanvasContext } from "../canvas/context";
 import { insertKnowledgeCard } from "../editor/bridge";
-import { useFocus } from "../state/focus";
 import { snapshotToPrompt, applyPending } from "@lingrui/ai";
 import { ydoc } from "../collab/doc";
 import { useUndoState, undoRound } from "../state/history";
 import { registerAsk } from "./ask";
 import { commitFaqAnswer } from "./faq";
 import { useReadOnlyShare } from "../shell/share";
+import { setFocus, useFocus } from "../state/focus";
+import { useRoundChanges } from "../state/round";
 import {
   resolvePending,
   clearPending,
@@ -117,6 +118,36 @@ function createAdapter(): ChatModelAdapter {
       commitFaqAnswer(question, accumulated);
     },
   };
+}
+
+/** 本轮 AI 改动清单：可点击定位（PRD/主界面.md §5.1） */
+function RoundChanges() {
+  const changes = useRoundChanges();
+  if (changes.length === 0) return null;
+
+  return (
+    <div className="round-changes">
+      <div className="round-changes-head">本轮改动（{changes.length}）· 点击定位</div>
+      <ul>
+        {changes.map((c) => (
+          <li key={c.id}>
+            <button
+              type="button"
+              className={`round-change${c.pending ? " is-pending" : ""}`}
+              onClick={() => {
+                if (c.nodeId) setFocus(c.nodeId);
+              }}
+              title={c.nodeId ? `定位到 ${c.nodeId}` : undefined}
+            >
+              <span className="round-change-tool">{c.tool}</span>
+              <span className="round-change-label">{c.label}</span>
+              {c.pending ? <span className="round-change-flag">待确认</span> : null}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function PendingPatches() {
@@ -269,6 +300,7 @@ export function ChatPanel() {
     <AssistantRuntimeProvider runtime={runtime}>
       <AskBridge />
       <Messages />
+      <RoundChanges />
       {readOnly ? null : <PendingPatches />}
       {readOnly ? (
         <p className="chat-readonly">只读分享视图 · 无法提问或修改</p>

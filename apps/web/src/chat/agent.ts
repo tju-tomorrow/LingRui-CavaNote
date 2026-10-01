@@ -14,6 +14,7 @@ import {
   planPet,
   toCanvasToolCall,
   toPetToolCall,
+  type CanvasToolCall,
   type PetToolCall,
   type ToolResult,
 } from "@lingrui/ai";
@@ -35,6 +36,8 @@ import { upsertNodeCard } from "../editor/bridge";
 import { getFocus, setFocus } from "../state/focus";
 import { beginRound } from "../state/history";
 import { pushPending } from "../state/pending";
+import { pushRoundChange, startRoundChanges } from "../state/round";
+import { autoSnapshot, autoSnapshotThrottled } from "../shell/snapshot";
 import { player } from "../state/player";
 import { buildReply } from "./explain";
 
@@ -124,6 +127,54 @@ function syncNodeToDocument(nodeId: string): void {
   upsertNode(ydoc, { ...node, blockIds: [...blockIds, blockId] });
 }
 
+/** 工具调用 → 改动清单里的一行（PRD/主界面.md §5.1） */
+function describeChange(call: CanvasToolCall, ok: boolean, pending: boolean): string {
+  const input = call.input as unknown as Record<string, unknown>;
+  const title = typeof input.title === "string" ? input.title : "";
+  const id = typeof input.id === "string" ? input.id : "";
+  const label = title || id;
+  switch (call.name) {
+    case "spawnNode":
+      return `新增节点「${label}」`;
+    case "updateNode":
+      return `更新节点「${label}」`;
+    case "moveNode":
+      return `移动节点「${label}」`;
+    case "deleteNode":
+      return `删除节点「${label}」`;
+    case "connect":
+      return `连线 ${String(input.from)} → ${String(input.to)}`;
+    case "disconnect":
+      return `断开 ${String(input.from)} → ${String(input.to)}`;
+    case "setStyle":
+      return `改样式「${label}」`;
+    case "annotate":
+      return "添加标注";
+    case "updateAnnotation":
+      return "修改标注";
+    case "deleteAnnotation":
+      return "删除标注";
+    case "focus":
+      return `聚焦「${String(input.nodeId ?? "")}」`;
+    case "narrate":
+      return "旁白";
+    case "flow":
+      return "数据流动画";
+    default:
+      // 联合类型已被穷尽，这里只在将来新增工具时兜底
+      return ok ? "改动" : `改动（未生效${pending ? "，待确认" : ""}）`;
+  }
+}
+
+/** 这条改动能定位到哪个节点 */
+function targetNodeOf(call: CanvasToolCall): string | undefined {
+  const input = call.input as unknown as Record<string, unknown>;
+  if (typeof input.id === "string") return input.id;
+  if (typeof input.nodeId === "string") return input.nodeId;
+  if (typeof input.from === "string") return input.from;
+  return undefined;
+}
+
 /** 执行一次画布工具调用，返回给用户看的短句 */
 export function runToolCall(name: string, input: unknown): string {
   // 宠物工具优先（两个工具名空间不重叠）
@@ -135,6 +186,8 @@ export function runToolCall(name: string, input: unknown): string {
 
   const startT = cursor;
   beginRound();
+  // 动手前自动打点（同一轮内节流成一个点）—— 这样「回到 AI 改之前」永远可用
+  autoSnapshotThrottled(`AI：${call.name}`);
   const result = executeTool({ doc: ydoc, t: cursor }, call);
   if (result.ok) {
     if (call.name === "focus") setFocus(call.input.nodeId);
@@ -144,6 +197,13 @@ export function runToolCall(name: string, input: unknown): string {
     }
     if (call.name === "spawnNode" || call.name === "updateNode") syncNodeToDocument(call.input.id);
   }
+  pushRoundChange({
+    tool: call.name,
+    label: describeChange(call, result.ok, Boolean(result.pending)),
+    nodeId: targetNodeOf(call),
+    pending: !result.applied && Boolean(result.pending),
+  });
+
   const message = applyToolResult(result);
   // 本轮从 startT 起自动播放（让宠物真地演一遍）
   if (result.ok) player.load(exportedTimeline(), "AI 演出", startT, shotsOf());
@@ -189,14 +249,23 @@ export function runAgent(message: string): AgentTurn {
   const startT = cursor;
   const notes: string[] = [];
 
-  // 这一轮的写入归为一个 undo 批次
+  // 这一轮的写入归为一个 undo 批次；清单也重新开始记
   beginRound();
+  startRoundChanges();
+  // 动手前自动打点：这样「回到 AI 改之前」是可用的（不是只有手动保存才有退路）
+  if (p.calls.length > 0) autoSnapshot(`AI：${message.slice(0, 12)}`);
 
   for (const call of p.calls) {
     const result = executeTool({ doc: ydoc, t: cursor }, call);
     toolResults.push(result);
     // 复用 applyToolResult：内含时间轴累加 + 游标推进 + pending 挂起
     notes.push(applyToolResult(result));
+    pushRoundChange({
+      tool: call.name,
+      label: describeChange(call, result.ok, Boolean(result.pending)),
+      nodeId: targetNodeOf(call),
+      pending: !result.applied && Boolean(result.pending),
+    });
 
     if (result.ok) {
       if (call.name === "focus") setFocus(call.input.nodeId);

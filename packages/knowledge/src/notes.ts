@@ -186,6 +186,40 @@ export function moveNote(doc: Y.Doc, id: NoteId, parentId: string | null): void 
   getNotes(doc).set(id, { ...note, parentId, updatedAt: Date.now() });
 }
 
+/** 按给定顺序重排同层（order = 下标） */
+export function reorderNotes(doc: Y.Doc, orderedIds: NoteId[]): void {
+  const notes = getNotes(doc);
+  orderedIds.forEach((id, index) => {
+    const note = notes.get(id);
+    if (note && note.order !== index) notes.set(id, { ...note, order: index });
+  });
+}
+
+/**
+ * 移动到指定父级下的指定位置（拖拽落点用）。
+ *
+ * @param index 在该父级子节点中的插入下标（0 = 最前）
+ */
+export function moveNoteTo(
+  doc: Y.Doc,
+  id: NoteId,
+  parentId: string | null,
+  index: number,
+): void {
+  if (!readNote(doc, id)) return;
+  moveNote(doc, id, parentId);
+  const after = readNote(doc, id);
+  // moveNote 可能因「移进自己子树」而拒绝，落点就没变，直接放弃
+  if (!after || (after.parentId ?? null) !== parentId) return;
+
+  const siblings = listNotes(doc)
+    .filter((n) => (n.parentId ?? null) === parentId && n.id !== id)
+    .map((n) => n.id);
+  const at = Math.max(0, Math.min(index, siblings.length));
+  siblings.splice(at, 0, id);
+  doc.transact(() => reorderNotes(doc, siblings));
+}
+
 /** 设标签 */
 export function setNoteTags(doc: Y.Doc, id: NoteId, tags: string[]): void {
   const note = readNote(doc, id);
