@@ -18,7 +18,7 @@
  *
  * 编辑策略：本地 draft 驱动输入框（光标不会跳），每次改动立刻写 Y.Doc（Yjs 很便宜）。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NODE_STYLE } from "@lingrui/canvas";
 import {
   markHuman,
@@ -33,6 +33,8 @@ import { noteFaqQuestion } from "../chat/faq";
 import { ydoc } from "../collab/doc";
 import { useReadOnlyShare } from "../shell/share";
 import { setFocus, useFocus } from "../state/focus";
+import { useCanvasVersion } from "./bridge";
+import { canvasViewportSize, nodeOverlayRect } from "./geometry";
 
 const ORIGIN_LABEL: Record<string, string> = {
   ai: "AI 生成",
@@ -74,6 +76,7 @@ export function NodeDetailCard() {
   const node = useKnowledgeNode(focus ?? undefined);
   const mounted = useMount();
   const readOnly = useReadOnlyShare();
+  const canvasVersion = useCanvasVersion();
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -174,12 +177,86 @@ export function NodeDetailCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- flush 只依赖 draft/node
   }, [draft, dirty, node?.id]);
 
-  if (!node) return null;
+  // ⚠️ 以下 hook 必须在任何 early-return **之前**调用（Rules of Hooks）——
+  // 否则「先有聚焦节点、再取消聚焦」时 hook 数量变化，React 会直接崩掉整棵树。
+  const cardRef = useRef<HTMLElement | null>(null);
+  const [place, setPlace] = useState<{ left: number; top: number; side: "left" | "right" } | null>(
+    null,
+  );
+
+  const d = node ? (draft ?? toDraft(node)) : null;
+  const links =
+    (node?.meta?.links as Array<{ label: string; href: string }> | undefined) ?? [];
+
+  const contentKey = [
+    node?.id,
+    editing ? "edit" : "read",
+    d?.roles.length ?? 0,
+    d?.tech.length ?? 0,
+    d?.faq.length ?? 0,
+    links.length,
+    (d?.summary.length ?? 0) > 0,
+  ].join(":");
+
+  /**
+   * 卡片位置：**锚定到它所解释的那个节点旁边**。
+   *
+   * 之前固定在画布右上角 —— 节点在左下角时，卡片和它解释的东西毫无视觉关联，
+   * 用户得自己找「这张卡说的是哪个框」。
+   *
+   * 规则：优先放节点右侧；右边放不下就翻到左侧；垂直居中于节点并夹在画布内。
+   * 节点不在视野里时退回停靠（右上角），并给一句提示。
+   */
+  useLayoutEffect(() => {
+    if (!node) {
+      setPlace(null);
+      return;
+    }
+    const rect = nodeOverlayRect(node.id);
+    if (!rect) {
+      setPlace(null); // 节点不在场景里 → 退回停靠
+      return;
+    }
+
+    const viewport = canvasViewportSize();
+
+    // 节点在画布外（用户平移/缩放走了）→ 锚定到画布边缘只会让人困惑
+    // （「这卡说的是哪个框？」），所以同样退回停靠 + 提示。
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const offscreen = cx < 0 || cx > viewport.width || cy < 0 || cy > viewport.height;
+    if (offscreen) {
+      setPlace(null);
+      return;
+    }
+    const card = cardRef.current;
+    const width = card?.offsetWidth || 320;
+    const height = card?.offsetHeight || 320;
+    const gap = 18;
+    const margin = 12;
+
+    // 优先右侧；右边真放不下再翻左侧
+    let side: "left" | "right" = "right";
+    let left = rect.left + rect.width + gap;
+    if (left + width + margin > viewport.width) {
+      side = "left";
+      left = rect.left - gap - width;
+    }
+    // 两侧都放不下（节点很宽 / 画布很窄）→ 贴在较空的一侧
+    left = Math.max(margin, Math.min(left, viewport.width - width - margin));
+
+    let top = rect.top + rect.height / 2 - height / 3;
+    top = Math.max(margin, Math.min(top, viewport.height - height - margin));
+
+    setPlace({ left, top, side });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 内容尺寸变了要重新夹取
+  }, [node?.id, canvasVersion, contentKey]);
+
+  if (!node || !d) return null;
 
   const style =
     NODE_STYLE[node.kind] ??
     NODE_STYLE.concept ?? { stroke: "#555555", background: "#f3f4f6", icon: "" };
-  const d = draft ?? toDraft(node);
 
   const patch = (next: Partial<Draft>) => {
     for (const key of Object.keys(next) as Array<keyof Draft>) touchedRef.current.add(key);
@@ -189,8 +266,6 @@ export function NodeDetailCard() {
     setDirty(true);
   };
 
-  const links =
-    (node.meta?.links as Array<{ label: string; href: string }> | undefined) ?? [];
   const hasBody =
     Boolean(node.summary) ||
     d.roles.length > 0 ||
@@ -200,7 +275,11 @@ export function NodeDetailCard() {
 
   return (
     <aside
-      className={`node-detail${mounted ? " is-in" : ""}${editing ? " is-editing" : ""}`}
+      ref={cardRef}
+      className={`node-detail${mounted ? " is-in" : ""}${editing ? " is-editing" : ""}${
+        place ? ` is-anchored is-${place.side}` : " is-docked"
+      }`}
+      style={place ? { left: place.left, top: place.top } : undefined}
       aria-label={`节点详情：${node.title}`}
     >
       <header className="nd-head">
@@ -479,6 +558,8 @@ export function NodeDetailCard() {
           </ul>
         </section>
       ) : null}
+
+      {!place ? <p className="nd-offscreen">这个节点不在视野里 · 卡片已停靠到角落</p> : null}
 
       {!hasBody && !editing ? <EmptyHint node={node} /> : null}
     </aside>

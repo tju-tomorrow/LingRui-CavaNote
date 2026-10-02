@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /*
  * BlockNote 的 shadcn 组件（斜杠菜单 / 格式工具栏 / 拖拽手柄菜单）全部用 Tailwind 类
@@ -9,40 +10,47 @@
  */
 @source "../node_modules/@blocknote/shadcn";
 
+/* 本应用的暗色档用 <html data-theme="dark">，对齐 shadcn 的 dark: 变体 */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /*
- * shadcn 的语义色 → 映射到本应用配色。
- * Tailwind v4 只有在这里声明了 `--color-*`，才会生成 `bg-popover` / `text-muted-foreground`
- * 这类工具类。暗色档在 polish.css 里覆盖这些变量。
+ * shadcn/ui 设计 token（中性 zinc，公开库默认主题）→ 生成 Tailwind 工具类。
+ * 应用自己的 --bg/--panel/--accent/... 全部引用这套 token，
+ * 于是全站配色（含手写 CSS 与 shadcn 组件）由同一处决定。
  */
 @theme {
   --color-background: #ffffff;
-  --color-foreground: #16161a;
+  --color-foreground: #09090b;
   --color-card: #ffffff;
-  --color-card-foreground: #16161a;
+  --color-card-foreground: #09090b;
   --color-popover: #ffffff;
-  --color-popover-foreground: #16161a;
-  --color-primary: #5b5bd6;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #f2f2f6;
-  --color-secondary-foreground: #16161a;
-  --color-muted: #f2f2f6;
-  --color-muted-foreground: #8b8b95;
-  --color-accent: #eeeefe;
-  --color-accent-foreground: #4f4fcc;
-  --color-destructive: #d64545;
+  --color-popover-foreground: #09090b;
+  --color-primary: #18181b;
+  --color-primary-foreground: #fafafa;
+  --color-secondary: #f4f4f5;
+  --color-secondary-foreground: #18181b;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #71717a;
+  --color-accent: #f4f4f5;
+  --color-accent-foreground: #18181b;
+  --color-destructive: #e7000b;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e9e9ee;
-  --color-input: #e9e9ee;
-  --color-ring: #5b5bd6;
+  --color-border: #e4e4e7;
+  --color-input: #e4e4e7;
+  --color-ring: #a1a1aa;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
 }
 
 :root {
-  --bg: #ffffff;
-  --panel: #fafafa;
-  --border: #e5e5e5;
-  --text: #1e1e1e;
-  --muted: #8a8a8a;
-  --accent: #5b5bd6;
+  --bg: var(--color-background);
+  --panel: var(--color-muted);
+  --border: var(--color-border);
+  --text: var(--color-foreground);
+  --muted: var(--color-muted-foreground);
+  --accent: var(--color-primary);
   font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -115,7 +123,7 @@ body,
 }
 
 .tree-item.active {
-  background: #eef0ff;
+  background: #f4f4f5;
   color: var(--accent);
 }
 
@@ -132,7 +140,7 @@ body,
 .focus-pill {
   font-size: 12px;
   color: var(--accent);
-  background: #eef0ff;
+  background: #f4f4f5;
   padding: 3px 8px;
   border-radius: 999px;
 }
@@ -163,8 +171,8 @@ body,
 .chat-msg-user {
   align-self: flex-end;
   max-width: 90%;
-  background: #eef0ff;
-  color: #2b2b6b;
+  background: #f4f4f5;
+  color: #18181b;
   padding: 6px 10px;
   border-radius: 10px;
 }
@@ -206,14 +214,14 @@ body,
   font-size: 12px;
   color: var(--accent);
   background: #fff;
-  border: 1px solid #d7d9f0;
+  border: 1px solid #e4e4e7;
   border-radius: 6px;
   padding: 3px 8px;
   cursor: pointer;
 }
 
 .chat-insert:hover {
-  background: #eef0ff;
+  background: #f4f4f5;
 }
 
 /* 文档里的知识卡片：块只存 nodeId，内容实时从 Knowledge 读 */
@@ -232,7 +240,7 @@ body,
 }
 
 .knowledge-card:hover {
-  background: #eef0ff;
+  background: #f4f4f5;
 }
 
 .knowledge-card .kc-kind {
@@ -385,7 +393,7 @@ html[data-glass="desktop"] .chat-msg-user,
 html[data-glass="desktop"] .tree-item.active,
 html[data-glass="desktop"] .focus-pill,
 html[data-glass="desktop"] .knowledge-card:hover {
-  background: rgba(238, 240, 255, 0.55);
+  background: rgba(244, 244, 245, 0.55);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
 }
@@ -578,12 +586,17 @@ html[data-glass="desktop"] .bn-container {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
-/* 节点详情卡（P1.6 ⭐）：右上角浮层，跟随全局 focus */
+/* 节点详情卡（P1.6 ⭐）：**锚定到它解释的那个节点旁边**
+ *
+ * 之前固定在右上角，节点在左下角时卡片和它解释的东西毫无视觉关联。
+ * 现在位置由 JS 算（见 NodeDetailCard 的 useLayoutEffect）：
+ * 优先节点右侧、放不下翻左侧、垂直居中并夹在画布内。
+ * - is-anchored：跟随节点（left/top 走 inline style）
+ * - is-docked：节点不在视野里时的退回位置（右上角）
+ */
 .node-detail {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 300px;
+  width: 320px;
   /* 留出右下角宠物的位置：卡片再长也不许压到它（否则宠物点不动） */
   max-height: calc(100% - 170px);
   overflow-y: auto;
@@ -603,6 +616,41 @@ html[data-glass="desktop"] .bn-container {
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
+}
+
+.node-detail.is-docked {
+  top: 12px;
+  right: 12px;
+}
+
+/* 指向节点的小箭头，让「这张卡说的是哪个框」一眼可见 */
+.node-detail.is-anchored::before {
+  content: "";
+  position: absolute;
+  top: 22px;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+
+.node-detail.is-anchored.is-right::before {
+  left: -6px;
+  border-right: none;
+  border-top: none;
+}
+
+.node-detail.is-anchored.is-left::before {
+  right: -6px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.nd-offscreen {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
 }
 
 .nd-head {
@@ -699,7 +747,7 @@ html[data-glass="desktop"] .bn-container {
   content: "▸";
   position: absolute;
   left: 0;
-  color: var(--accent, #5b5bd6);
+  color: var(--accent, #18181b);
   font-size: 10px;
 }
 
@@ -796,7 +844,7 @@ html[data-glass="desktop"] .bn-container {
 .tree-rename {
   font: inherit;
   color: var(--text);
-  border: 1px solid var(--accent, #5b5bd6);
+  border: 1px solid var(--accent, #18181b);
   border-radius: 5px;
   background: #fff;
   padding: 2px 6px;
@@ -822,8 +870,8 @@ html[data-glass="desktop"] .bn-container {
   align-items: center;
   gap: 3px;
   font-size: 11px;
-  background: #f0f0ff;
-  color: var(--accent, #5b5bd6);
+  background: #f4f4f5;
+  color: var(--accent, #18181b);
   border-radius: 99px;
   padding: 1px 8px;
 }
@@ -853,14 +901,14 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .dh-tag-add:hover {
-  color: var(--accent, #5b5bd6);
-  border-color: var(--accent, #5b5bd6);
+  color: var(--accent, #18181b);
+  border-color: var(--accent, #18181b);
 }
 
 .dh-tag-input {
   font: inherit;
   font-size: 11px;
-  border: 1px solid var(--accent, #5b5bd6);
+  border: 1px solid var(--accent, #18181b);
   border-radius: 99px;
   padding: 1px 8px;
   outline: none;
@@ -903,7 +951,7 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .view-search:focus {
-  border-color: var(--accent, #5b5bd6);
+  border-color: var(--accent, #18181b);
 }
 
 .view-chips {
@@ -923,13 +971,13 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .view-chip:hover {
-  border-color: var(--accent, #5b5bd6);
+  border-color: var(--accent, #18181b);
 }
 
 .view-chip.active {
-  background: #f0f0ff;
-  border-color: var(--accent, #5b5bd6);
-  color: var(--accent, #5b5bd6);
+  background: #f4f4f5;
+  border-color: var(--accent, #18181b);
+  color: var(--accent, #18181b);
 }
 
 .view-chip.danger {
@@ -1023,7 +1071,7 @@ html[data-glass="desktop"] .bn-container {
 .view-primary {
   align-self: flex-start;
   border: none;
-  background: var(--accent, #5b5bd6);
+  background: var(--accent, #18181b);
   color: #fff;
   border-radius: 6px;
   padding: 5px 12px;
@@ -1053,7 +1101,7 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .project-card:hover {
-  border-color: var(--accent, #5b5bd6);
+  border-color: var(--accent, #18181b);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
 
@@ -1296,7 +1344,7 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .pet-field input:focus {
-  border-color: var(--accent, #5b5bd6);
+  border-color: var(--accent, #18181b);
 }
 
 .pet-swatches {
@@ -1371,7 +1419,7 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .round-change:hover {
-  background: #f0f0ff;
+  background: #f4f4f5;
 }
 
 .round-change-tool {
@@ -1499,9 +1547,9 @@ html[data-glass="desktop"] .bn-container {
 .spotlight-hole {
   position: absolute;
   border-radius: 12px;
-  box-shadow: 0 0 0 9999px rgba(15, 18, 30, 0.34), 0 0 0 6px rgba(91, 91, 214, 0.28),
-    0 0 34px 6px rgba(91, 91, 214, 0.45);
-  outline: 2px solid rgba(91, 91, 214, 0.9);
+  box-shadow: 0 0 0 9999px rgba(15, 18, 30, 0.34), 0 0 0 6px rgba(24, 24, 27, 0.28),
+    0 0 34px 6px rgba(24, 24, 27, 0.45);
+  outline: 2px solid rgba(24, 24, 27, 0.9);
   transition: left 260ms cubic-bezier(0.22, 1, 0.36, 1), top 260ms cubic-bezier(0.22, 1, 0.36, 1),
     width 260ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -1612,7 +1660,7 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .lr-field input:focus {
-  border-color: var(--accent, #5b5bd6);
+  border-color: var(--accent, #18181b);
 }
 
 .lr-modal-error {
@@ -1631,7 +1679,7 @@ html[data-glass="desktop"] .bn-container {
 
 .lr-btn-primary {
   border: none;
-  background: var(--accent, #5b5bd6);
+  background: var(--accent, #18181b);
   color: #fff;
   border-radius: 6px;
   padding: 6px 14px;
@@ -1654,7 +1702,7 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .lr-btn-ghost:hover {
-  color: var(--accent, #5b5bd6);
+  color: var(--accent, #18181b);
 }
 
 /* 详情卡的编辑模式 */
@@ -1675,8 +1723,8 @@ html[data-glass="desktop"] .bn-container {
 
 .nd-edit.is-on,
 .nd-edit:hover {
-  background: #f0f0ff;
-  color: var(--accent, #5b5bd6);
+  background: #f4f4f5;
+  color: var(--accent, #18181b);
 }
 
 .nd-title-input,
@@ -1720,7 +1768,7 @@ html[data-glass="desktop"] .bn-container {
 .nd-line-input:focus,
 .nd-answer-input:focus,
 .nd-chip-input:focus {
-  border-color: var(--accent, #5b5bd6);
+  border-color: var(--accent, #18181b);
 }
 
 .nd-roles-edit li {
@@ -1761,8 +1809,8 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .nd-add:hover {
-  color: var(--accent, #5b5bd6);
-  border-color: var(--accent, #5b5bd6);
+  color: var(--accent, #18181b);
+  border-color: var(--accent, #18181b);
 }
 
 .nd-chip {
@@ -1813,7 +1861,7 @@ html[data-glass="desktop"] .bn-container {
   font-size: 11px;
   border: 1px solid var(--border);
   background: #fff;
-  color: var(--accent, #5b5bd6);
+  color: var(--accent, #18181b);
   border-radius: 5px;
   padding: 2px 8px;
   cursor: pointer;
@@ -1821,7 +1869,7 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .nd-faq-ask:hover {
-  background: #f0f0ff;
+  background: #f4f4f5;
 }
 
 .nd-links li {
@@ -1830,7 +1878,7 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .nd-links a {
-  color: var(--accent, #5b5bd6);
+  color: var(--accent, #18181b);
   text-decoration: none;
 }
 
@@ -1892,6 +1940,6 @@ html[data-glass="desktop"] .bn-container {
 }
 
 .share-url:focus {
-  border-color: var(--accent, #5b5bd6);
+  border-color: var(--accent, #18181b);
   background: #fff;
 }

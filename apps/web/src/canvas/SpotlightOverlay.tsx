@@ -10,54 +10,21 @@
  * 压暗用 `box-shadow: 0 0 0 9999px` 一个属性搞定，不用画四块遮罩。
  */
 import { useEffect, useState } from "react";
-import { sceneCoordsToViewportCoords } from "@excalidraw/excalidraw";
 import { getCanvas, useCanvasVersion } from "./bridge";
+import { nodeOverlayRect, type OverlayRect } from "./geometry";
 import { usePlayer } from "../state/player";
 
-interface Box {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
-/** 节点 id → 元素 id（与 excalidraw-binding 的约定一致） */
-const elementIdOf = (nodeId: string): string => `el-${nodeId}`;
-
-function boxOf(elementId: string): Box | null {
-  const api = getCanvas();
-  if (!api) return null;
-  const element = api.getSceneElements().find((el) => el.id === elementId);
-  if (!element) return null;
-
-  const appState = api.getAppState();
-  // sceneCoordsToViewportCoords 返回的是**页面绝对**坐标（含容器 offset），
-  // 而覆盖层是容器相对定位 → 必须减掉，否则框会跑到画布外面。
-  const offsetLeft = Number((appState as { offsetLeft?: number }).offsetLeft ?? 0);
-  const offsetTop = Number((appState as { offsetTop?: number }).offsetTop ?? 0);
-
-  const topLeft = sceneCoordsToViewportCoords({ sceneX: element.x, sceneY: element.y }, appState);
-  const bottomRight = sceneCoordsToViewportCoords(
-    { sceneX: element.x + element.width, sceneY: element.y + element.height },
-    appState,
-  );
-
-  return {
-    left: topLeft.x - offsetLeft,
-    top: topLeft.y - offsetTop,
-    width: bottomRight.x - topLeft.x,
-    height: bottomRight.y - topLeft.y,
-  };
-}
-
 export function SpotlightOverlay({ enabled = true }: { enabled?: boolean }) {
-  const { snapshot, playing, script, t } = usePlayer();
+  const { snapshot, playing, script, t, duration } = usePlayer();
   const canvasVersion = useCanvasVersion();
-  const [box, setBox] = useState<Box | null>(null);
+  const [box, setBox] = useState<OverlayRect | null>(null);
 
   const focus = snapshot?.focus ?? null;
-  // 演出没开始就不打扰（t=0 且没在播时也不压暗）
-  const active = enabled && Boolean(script) && (playing || t > 0) && Boolean(focus);
+  // 演出没开始就不打扰；**放完就撒掉** —— 否则时间轴停在末尾时聚光灯会一直盖满画布，
+  // 画布看起来就是"一片空白/灰蒙蒙"。
+  const ended = duration > 0 && t >= duration - 0.01;
+  const active =
+    enabled && Boolean(script) && !ended && (playing || t > 0) && Boolean(focus);
 
   useEffect(() => {
     if (!active || !focus) {
@@ -65,12 +32,12 @@ export function SpotlightOverlay({ enabled = true }: { enabled?: boolean }) {
       return;
     }
     // canvasVersion 变了（缩放/平移/元素变动）就重算
-    const next = boxOf(elementIdOf(focus));
+    const next = nodeOverlayRect(focus);
     setBox(next);
     if (next) return;
 
     // 元素还没出现（spawn 动画进行中）：下一帧再试
-    const raf = requestAnimationFrame(() => setBox(boxOf(elementIdOf(focus))));
+    const raf = requestAnimationFrame(() => setBox(nodeOverlayRect(focus)));
     return () => cancelAnimationFrame(raf);
   }, [active, focus, canvasVersion]);
 
@@ -89,7 +56,7 @@ export function SpotlightOverlay({ enabled = true }: { enabled?: boolean }) {
     if (!api) return;
 
     const raf = requestAnimationFrame(() => {
-      const element = api.getSceneElements().find((el) => el.id === elementIdOf(focus));
+      const element = api.getSceneElements().find((el) => el.id === `el-${focus}`);
       if (!element) return;
       api.scrollToContent([element], { fitToContent: false, animate: true });
     });
