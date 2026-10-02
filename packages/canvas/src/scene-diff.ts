@@ -96,6 +96,36 @@ export function diffScene<T extends DiffableElement>(current: T[], desired: T[])
     else stats.added += 1;
   }
 
+  // ---- 容器 ↔ 标签重新绑定 ----
+  //
+  // Excalidraw 只通过容器的 `boundElements` 找绑定文本：容器指向哪个 text id，就渲染哪个。
+  // 但 `convertToExcalidrawElements` 每次都会给标签**生成新的随机 id**，
+  // 而容器往往因为签名没变而被**复用**（带着旧的 boundElements）。
+  // 于是「只改了文字、没改位置」时：标签被换成新 id，容器还指着旧 id
+  //   → Excalidraw 找不到绑定文本 → **文字整个不渲染**（框还在、字没了）。
+  //
+  // 实测：给所有标签加 emoji 前缀后，整张图的文字全部消失。
+  // 这里在输出列表上强制重绑，保证容器指向的是真正在列表里的那个标签。
+  const labelIdByContainer = new Map<string, string>();
+  for (const element of elements) {
+    if (element.containerId) labelIdByContainer.set(element.containerId, element.id);
+  }
+  for (let i = 0; i < elements.length; i += 1) {
+    const element = elements[i]!;
+    const labelId = labelIdByContainer.get(element.id);
+    if (!labelId) continue;
+    const bound = (element as { boundElements?: Array<{ id: string; type: string }> | null })
+      .boundElements;
+    if (!Array.isArray(bound)) continue;
+    const needsFix = bound.some((b) => b.type === "text" && b.id !== labelId);
+    if (!needsFix) continue;
+    // 复制一份再改：直接改会动到 Excalidraw 场景里的同一个对象实例
+    elements[i] = {
+      ...element,
+      boundElements: bound.map((b) => (b.type === "text" ? { ...b, id: labelId } : b)),
+    } as T;
+  }
+
   for (const identity of currentByIdentity.keys()) {
     if (!keptIdentities.has(identity)) stats.removed += 1;
   }

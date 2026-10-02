@@ -117,3 +117,54 @@ describe("diffScene", () => {
     expect(elements.map((e) => e.id).sort()).toEqual(["hand-1", "hand-2"]);
   });
 });
+
+describe("容器 ↔ 标签重新绑定（修复：文字整个不渲染）", () => {
+  const rect = (id: string, boundTextId: string) => ({
+    id,
+    type: "rectangle",
+    x: 0,
+    y: 0,
+    width: 250,
+    height: 96,
+    boundElements: [{ id: boundTextId, type: "text" }],
+    customData: { lingrui: true, nodeId: id },
+  });
+  const label = (id: string, containerId: string, text: string) => ({
+    id,
+    type: "text",
+    x: 20,
+    y: 30,
+    width: 100,
+    height: 22,
+    containerId,
+    text,
+    customData: { lingrui: true },
+  });
+
+  test("只改文字时：容器被复用，但 boundElements 必须指向新标签 id", () => {
+    // 现状：容器绑着旧标签 old-label，场景里也确实还是 old-label
+    const current = [rect("el-a", "old-label"), label("old-label", "el-a", "旧标题")];
+    // 期望：文字变了 → 标签换成新 id（convertToExcalidrawElements 每次都这样）
+    const desired = [rect("el-a", "fresh-label"), label("fresh-label", "el-a", "新标题")];
+
+    const { elements } = diffScene(current as never, desired as never);
+    const outRect = elements.find((e) => e.id === "el-a") as unknown as {
+      boundElements: Array<{ id: string; type: string }>;
+    };
+    const outLabel = elements.find((e) => e.containerId === "el-a") as unknown as { id: string };
+
+    // 关键断言：容器指向的，就是输出里真实存在的那个标签
+    const boundText = outRect.boundElements.find((b) => b.type === "text");
+    expect(boundText?.id).toBe(outLabel.id);
+  });
+
+  test("文字没变时：标签被复用（id 不变），绑定也不动", () => {
+    const current = [rect("el-a", "same-label"), label("same-label", "el-a", "一样的")];
+    const desired = [rect("el-a", "another-random-id"), label("another-random-id", "el-a", "一样的")];
+
+    const { elements, stats } = diffScene(current as never, desired as never);
+    const outLabel = elements.find((e) => e.containerId === "el-a") as unknown as { id: string };
+    expect(outLabel.id).toBe("same-label"); // 复用，随机 id 不会污染场景
+    expect(stats.reused).toBeGreaterThan(0);
+  });
+});
