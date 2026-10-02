@@ -28,7 +28,12 @@ function snapshot(): KnowledgeNode[] {
   const order = getOrder(ydoc).toArray();
   const ids = order.length > 0 ? order : [...nodes.keys()];
   const out: KnowledgeNode[] = [];
+  // 去重：`order` 可能因并发 upsert（includes 竞态）而出现重复 id，
+  // 直接渲染会撞 key → React 反复报错甚至卡死。
+  const seen = new Set<string>();
   for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
     const node = nodes.get(id);
     if (node) out.push(node);
   }

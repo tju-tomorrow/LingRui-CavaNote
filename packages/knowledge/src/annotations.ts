@@ -61,6 +61,13 @@ export interface Chapter {
   order: number;
   /** 时间轴起始秒（分镜缩略图点击定位用） */
   startT?: number;
+  /**
+   * 来源：`auto`（从动作流推导，可随时被覆盖）/ `manual`（人工改过，不许覆盖）。
+   *
+   * 之前靠内存里的「上一次推导指纹」判断能不能覆盖 —— 刷新后那个指纹没了，
+   * 于是既不敢覆盖也不再播种，分镜就永久停在旧数据上（演出明明已经往前走了）。
+   */
+  source?: "auto" | "manual";
 }
 
 export type ProgressState = "todo" | "learning" | "done";

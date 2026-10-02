@@ -7,8 +7,10 @@ import { useState } from "react";
 import { logout, useAuth } from "../auth/store";
 import { useDocumentActions } from "./actions";
 import { useTheme } from "./theme";
+import { setView } from "../state/view";
 import { setTtsEnabled, ttsSupported, useTtsEnabled } from "../timeline/tts";
 import { LoginDialog } from "./LoginDialog";
+import { ShareDialog } from "./ShareDialog";
 import { IconExport, IconMoon, IconPlay, IconShare, IconStop, IconSun } from "./icons";
 
 export function TopBar({
@@ -22,7 +24,8 @@ export function TopBar({
 }) {
   const [theme, setTheme] = useTheme();
   const [accountOpen, setAccountOpen] = useState(false);
-  const { exportDoc, share } = useDocumentActions();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { exportDoc, share, shareOpen, closeShare } = useDocumentActions();
   const auth = useAuth();
   const tts = useTtsEnabled();
 
@@ -73,16 +76,69 @@ export function TopBar({
         <IconShare size={17} />
       </button>
 
-      <button
-        className="tb-avatar"
-        type="button"
-        title={auth.user ? `${auth.user.name}（${auth.user.email}）· 点击退出` : "登录 / 注册"}
-        onClick={() => (auth.user ? logout() : setAccountOpen(true))}
-      >
-        {auth.user ? auth.user.name.slice(0, 1) : "登"}
-      </button>
+      {/* 头像点开是**菜单**，不是直接退出 —— 单击就把人登出太危险 */}
+      <div className="tb-account">
+        <button
+          className="tb-avatar"
+          type="button"
+          title={auth.user ? `${auth.user.name}（${auth.user.email}）` : "登录 / 注册"}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          {auth.user ? auth.user.name.slice(0, 1) : "登"}
+        </button>
+
+        {menuOpen ? (
+          <>
+            <div className="tb-menu-backdrop" onClick={() => setMenuOpen(false)} />
+            <div className="tb-menu" role="menu">
+              {auth.user ? (
+                <>
+                  <div className="tb-menu-head">
+                    <strong>{auth.user.name}</strong>
+                    <span>{auth.user.email}</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setView("settings");
+                    }}
+                  >
+                    ⚙ 设置
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      logout();
+                    }}
+                  >
+                    ⏏ 退出登录
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setAccountOpen(true);
+                  }}
+                >
+                  → 登录 / 注册
+                </button>
+              )}
+            </div>
+          </>
+        ) : null}
+      </div>
 
       {accountOpen ? <LoginDialog onClose={() => setAccountOpen(false)} /> : null}
+      {shareOpen ? <ShareDialog onClose={closeShare} /> : null}
     </header>
   );
 }

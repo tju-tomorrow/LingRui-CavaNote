@@ -63,6 +63,7 @@ export function useDocumentActions() {
   const nodes = useKnowledgeNodes();
   const [savedAt, setSavedAt] = useState<number | null>(() => latestSnapshotAt());
   const [recording, setRecording] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const exportDoc = useCallback(async () => {
     const md = await buildMarkdown(DOC_TITLE, DOC_SUBTITLE, nodes);
@@ -93,8 +94,23 @@ export function useDocumentActions() {
 
   const share = useCallback(async () => {
     const ok = await copyShareLink();
-    toast(ok ? "分享链接已复制到剪贴板" : "复制失败，请手动复制地址栏");
+    if (ok) {
+      toast("分享链接已复制到剪贴板");
+      return;
+    }
+    // 剪贴板不可用（无 user activation / 非安全上下文）→ 把链接摆出来让用户自己复制
+    setShareOpen(true);
   }, []);
 
-  return { exportDoc, exportVideo, recording, save, share, savedAt, savedLabel: timeLabel(savedAt) };
+  return {
+    exportDoc,
+    exportVideo,
+    recording,
+    save,
+    share,
+    shareOpen,
+    closeShare: () => setShareOpen(false),
+    savedAt,
+    savedLabel: timeLabel(savedAt),
+  };
 }

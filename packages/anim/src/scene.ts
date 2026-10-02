@@ -224,6 +224,12 @@ export function sampleAt(script: SceneScript, t: number): SceneState {
 
       case "node.focus":
         state.focus = a.nodeId;
+        // 镜头移到新节点时，上一句旁白就过期了：
+        // 否则会出现「聚光灯照着网关、字幕还挂着用户那句」的错位。
+        // 新的旁白会在随后的 mascot.say / pet.say 里重新设上。
+        if (state.narration && state.narration.nodeId !== a.nodeId) {
+          state.narration = null;
+        }
         break;
 
       case "camera.pan":

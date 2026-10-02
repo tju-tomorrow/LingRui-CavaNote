@@ -35,7 +35,9 @@ export async function buildMarkdown(
   const lines: string[] = [`# ${title}`, "", `> ${subtitle}`, ""];
 
   if (doc.trim()) {
-    lines.push(doc.trim(), "");
+    // 文档自己的第一个 H1 通常就是笔记标题 → 去掉，免得导出里标题出现两遍
+    const body = doc.trim().replace(/^#\s+.*\n+/, "");
+    lines.push(body.trim(), "");
   }
 
   lines.push("---", "", "## 知识节点", "");

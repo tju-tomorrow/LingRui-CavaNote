@@ -13,6 +13,7 @@ import { ensureDefaultPet, getActivePet, getActivePetMap, getPets, type PetSpec 
 import { ydoc } from "../collab/doc";
 import { useFocus } from "../state/focus";
 import { getPlayerState, subscribePlayer } from "../state/player";
+import { PetPanel } from "./PetPanel";
 
 /** 订阅当前激活宠物（Y.Doc pet root） */
 function useActivePet(): PetSpec | undefined {
@@ -45,6 +46,19 @@ export function PetLayer(): JSX.Element | null {
   const [narration, setNarration] = useState<string | null>(null);
   /** 演出中（旁白由字幕条负责，宠物不再重复） */
   const [performing, setPerforming] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [bounce, setBounce] = useState(false);
+  /** 位置（可拖动，记在 localStorage） */
+  const [pos, setPos] = useState(() => {
+    try {
+      const raw = localStorage.getItem("lingrui-pet-pos");
+      if (raw) return JSON.parse(raw) as { right: number; bottom: number };
+    } catch {
+      /* ignore */
+    }
+    return { right: 20, bottom: 176 };
+  });
+  const dragRef = useRef<{ x: number; y: number; right: number; bottom: number; moved: boolean } | null>(null);
 
   // 建立控制器 + rAF 渲染（组件 unmount / 换宠时重建）
   useEffect(() => {
@@ -118,13 +132,14 @@ export function PetLayer(): JSX.Element | null {
       className="pet-layer"
       style={{
         position: "fixed",
-        right: 20,
-        bottom: 176,
+        right: pos.right,
+        bottom: pos.bottom,
         zIndex: 4,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         gap: 6,
+        // 层本身不挡画布，只有宠物自己可点
         pointerEvents: "none",
         userSelect: "none",
         transition: "transform 180ms linear",
@@ -147,7 +162,66 @@ export function PetLayer(): JSX.Element | null {
           {bubble}
         </div>
       ) : null}
-      <canvas ref={canvasRef} />
+      {panelOpen ? <PetPanel pet={pet} onClose={() => setPanelOpen(false)} /> : null}
+
+      {/* 宠物本体：可点（开面板 + 弹一下）、可拖（挪开别挡着） */}
+      <div
+        className={`pet-hit${bounce ? " is-bounce" : ""}`}
+        role="button"
+        tabIndex={0}
+        aria-label={`${pet.name}（点击打开宠物面板，可拖动）`}
+        title="点一下：宠物面板 · 拖动：换个位置"
+        onPointerDown={(e) => {
+          dragRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            right: pos.right,
+            bottom: pos.bottom,
+            moved: false,
+          };
+          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        }}
+        onPointerMove={(e) => {
+          const d = dragRef.current;
+          if (!d) return;
+          const dx = e.clientX - d.x;
+          const dy = e.clientY - d.y;
+          if (!d.moved && Math.abs(dx) + Math.abs(dy) > 5) d.moved = true;
+          if (d.moved) {
+            setPos({
+              right: Math.max(6, d.right - dx),
+              bottom: Math.max(6, d.bottom - dy),
+            });
+          }
+        }}
+        onPointerUp={() => {
+          const d = dragRef.current;
+          dragRef.current = null;
+          if (!d) return;
+          if (d.moved) {
+            setPos((cur) => {
+              try {
+                localStorage.setItem("lingrui-pet-pos", JSON.stringify(cur));
+              } catch {
+                /* ignore */
+              }
+              return cur;
+            });
+          } else {
+            setPanelOpen((v) => !v);
+            setBounce(true);
+            window.setTimeout(() => setBounce(false), 420);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setPanelOpen((v) => !v);
+          }
+        }}
+      >
+        <canvas ref={canvasRef} />
+      </div>
       <span style={{ fontSize: 11, color: "#8a8a8a" }}>{pet.name}</span>
     </div>
   );

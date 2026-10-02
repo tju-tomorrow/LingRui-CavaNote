@@ -12,6 +12,7 @@ import { ydoc } from "../collab/doc";
 import { useNoteText } from "../collab/useKnowledge";
 import { useDocumentActions } from "./actions";
 import { HistoryPanel } from "./HistoryPanel";
+import { ShareDialog } from "./ShareDialog";
 
 function readingMinutes(text: string): number {
   // 中文按字数算：300 字/分钟是常见的中文阅读速度
@@ -27,7 +28,8 @@ function formatDate(at: number): string {
 }
 
 export function DocHeader({ note }: { note: NoteMeta }) {
-  const { exportDoc, exportVideo, recording, save, share, savedLabel } = useDocumentActions();
+  const { exportDoc, exportVideo, recording, save, share, shareOpen, closeShare, savedLabel } =
+    useDocumentActions();
   const [adding, setAdding] = useState(false);
   const [history, setHistory] = useState(false);
 
@@ -119,6 +121,7 @@ export function DocHeader({ note }: { note: NoteMeta }) {
       </div>
 
       {history ? <HistoryPanel onClose={() => setHistory(false)} /> : null}
+      {shareOpen ? <ShareDialog onClose={closeShare} /> : null}
     </div>
   );
 }

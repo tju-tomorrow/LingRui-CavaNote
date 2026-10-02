@@ -59,41 +59,32 @@ function applyToolResult(result: ToolResult): string {
   return result.ok ? `\n\n⚙ ${result.message}` : `\n\n（${result.message}）`;
 }
 
-/** 上一次写进 Y.Doc 的分镜指纹（内存态，刷新即清） */
-let lastSeededShotsFp = "";
-
 /**
  * 从当前动作流推导分镜（缩略图用），并同步进 Y.Doc（PRD/演出层.md §4）。
  *
- * 同步规则（「先推导、后人工改」）：
- *   - Y.Doc 里的分镜**和上一版推导一致** → 用新的推导覆盖（AI 每轮都在讲新节点，
- *     分镜应该跟着长）；
- *   - 一旦**人工**改过（重命名/合并/排序，指纹就不再等于推导）→ 推导停手，
- *     以人工那版为准。
+ * 规则：**只要没有人工改过（`source === "manual"`），就跟着推导走**。
+ * 早先靠内存里的「上次推导指纹」判断，刷新后指纹丢了 → 既不覆盖也不播种 →
+ * 分镜永久停在旧数据上（演出已经往前走了，缩略图还是老的）。
  */
 function shotsOf() {
   const nodes = getNodes(ydoc);
   const derived = deriveShots(timeline, (id) => nodes.get(id)?.title);
+  if (derived.length === 0) return derived;
 
-  if (derived.length > 0) {
-    const persistedFp = listChapters(ydoc)
-      .map((c) => c.id)
-      .join(",");
-    if (persistedFp === lastSeededShotsFp && lastSeededShotsFp !== "") {
-      // 推导与落盘一致且已落过盘 → 跟随推导继续长
-      replaceChapters(
-        ydoc,
-        derived.map((s, i) => ({ id: s.id, title: s.title, order: i, startT: s.startT })),
-      );
-    } else if (listChapters(ydoc).length === 0 && lastSeededShotsFp === "") {
-      // 第一次落盘：分镜还完全没有，种一份（这是"未人工改过"的初始态）
-      replaceChapters(
-        ydoc,
-        derived.map((s, i) => ({ id: s.id, title: s.title, order: i, startT: s.startT })),
-      );
-    }
+  const persisted = listChapters(ydoc);
+  const edited = persisted.some((c) => c.source === "manual");
+  if (!edited) {
+    replaceChapters(
+      ydoc,
+      derived.map((s, i) => ({
+        id: s.id,
+        title: s.title,
+        order: i,
+        startT: s.startT,
+        source: "auto" as const,
+      })),
+    );
   }
-  lastSeededShotsFp = derived.map((s) => s.id).join(",");
   return derived;
 }
 
@@ -327,6 +318,7 @@ export function hydrateTimeline(): boolean {
   const last = stored.reduce((max, a) => Math.max(max, a.t), 0);
   cursor = last + 1.5;
 
+  // 顺带把分镜重新推导一遍：恢复的演出可能比 Y.Doc 里的 chapters 新
   player.load(exportedTimeline(), "AI 演出", last, shotsOf());
   return true;
 }

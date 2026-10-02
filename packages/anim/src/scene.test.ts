@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { sampleAt, type SceneScript } from "./scene";
+import { sampleAt, type Action, type SceneScript } from "./scene";
 
 const script: SceneScript = {
   id: "s1",
@@ -52,5 +52,35 @@ describe("sampleAt", () => {
     const s = sampleAt(script, 7);
     expect(s.focus).toBe("gateway");
     expect(s.narration?.text).toBe("请求先到网关。");
+  });
+});
+
+describe("旁白跟随焦点（修复：字幕与聚光灯错位）", () => {
+  const actions: Action[] = [
+    { t: 0, kind: "node.spawn", nodeId: "a", at: [0, 0] },
+    { t: 0, kind: "node.spawn", nodeId: "b", at: [300, 0] },
+    { t: 1, kind: "node.focus", nodeId: "a" },
+    { t: 2, kind: "mascot.say", text: "这是 A" },
+    { t: 5, kind: "node.focus", nodeId: "b" },
+  ];
+  const script: SceneScript = { id: "narration", title: "旁白测试", duration: 10, actions };
+
+  test("讲到 A 时旁白挂在 A 上", () => {
+    const s = sampleAt(script, 3);
+    expect(s.narration?.text).toBe("这是 A");
+    expect(s.narration?.nodeId).toBe("a");
+  });
+
+  test("镜头移到 B 后旧旁白必须清掉（不能还挂着 A）", () => {
+    const s = sampleAt(script, 6);
+    expect(s.focus).toBe("b");
+    expect(s.narration).toBeNull();
+  });
+
+  test("到 B 之后新说的旁白挂到 B 上", () => {
+    const withSay: Action[] = [...actions, { t: 7, kind: "mascot.say", text: "这是 B" }];
+    const s = sampleAt({ id: "narration2", title: "旁白测试", duration: 10, actions: withSay }, 8);
+    expect(s.narration?.text).toBe("这是 B");
+    expect(s.narration?.nodeId).toBe("b");
   });
 });
