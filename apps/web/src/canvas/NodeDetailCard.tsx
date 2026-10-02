@@ -78,6 +78,15 @@ export function NodeDetailCard() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dirty, setDirty] = useState(false);
+  /**
+   * 用户**真正碰过**的字段。
+   *
+   * 只靠「草稿 vs 节点」求差是不够的：草稿一旦过期（比如节点在编辑期间被 AI 更新过），
+   * 求差就会把没碰过的字段也判成「改了」，然后用草稿里的旧值把它写空 ——
+   * 实测「加一条核心作用」会顺手清空 FAQ。
+   * 记下碰过谁，就只写谁。
+   */
+  const touchedRef = useRef(new Set<keyof Draft>());
   /** 最新草稿（防抖提交 + 切节点时刷盘要用） */
   const draftRef = useRef<Draft | null>(null);
   const nodeIdRef = useRef<string | undefined>(undefined);
@@ -92,16 +101,30 @@ export function NodeDetailCard() {
     const fresh = readNode(ydoc, nodeId);
     if (!fresh) return;
 
+    const touched = touchedRef.current;
     const next: Partial<Draft> = {};
-    if (d.title !== fresh.title) next.title = d.title;
-    if (d.summary !== (fresh.summary ?? "")) next.summary = d.summary;
-    if (JSON.stringify(d.roles) !== JSON.stringify(fresh.roles ?? [])) next.roles = d.roles;
-    if (JSON.stringify(d.faq) !== JSON.stringify(fresh.faq ?? [])) next.faq = d.faq;
-    if (JSON.stringify(d.tags) !== JSON.stringify(fresh.tags ?? [])) next.tags = d.tags;
+    // 只写「用户碰过」的字段，且确实与当前值不同
+    if (touched.has("title") && d.title !== fresh.title) next.title = d.title;
+    if (touched.has("summary") && d.summary !== (fresh.summary ?? "")) next.summary = d.summary;
+    if (touched.has("roles") && JSON.stringify(d.roles) !== JSON.stringify(fresh.roles ?? [])) {
+      next.roles = d.roles;
+    }
+    if (touched.has("faq") && JSON.stringify(d.faq) !== JSON.stringify(fresh.faq ?? [])) {
+      next.faq = d.faq;
+    }
+    if (touched.has("tags") && JSON.stringify(d.tags) !== JSON.stringify(fresh.tags ?? [])) {
+      next.tags = d.tags;
+    }
     const freshTech = Array.isArray(fresh.meta?.["tech"]) ? (fresh.meta["tech"] as string[]) : [];
-    if (JSON.stringify(d.tech) !== JSON.stringify(freshTech)) next.tech = d.tech;
+    if (touched.has("tech") && JSON.stringify(d.tech) !== JSON.stringify(freshTech)) {
+      next.tech = d.tech;
+    }
 
-    if (Object.keys(next).length === 0) return;
+    if (Object.keys(next).length === 0) {
+      touched.clear();
+      return;
+    }
+    touched.clear();
 
     const meta = { ...(fresh.meta ?? {}) };
     if (next.tech) meta["tech"] = next.tech;
@@ -159,6 +182,7 @@ export function NodeDetailCard() {
   const d = draft ?? toDraft(node);
 
   const patch = (next: Partial<Draft>) => {
+    for (const key of Object.keys(next) as Array<keyof Draft>) touchedRef.current.add(key);
     const merged = { ...(draftRef.current ?? d), ...next };
     draftRef.current = merged;
     setDraft(merged);
