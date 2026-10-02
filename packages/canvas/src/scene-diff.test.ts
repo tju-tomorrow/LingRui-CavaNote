@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { diffScene, elementIdentity, elementSignature, type DiffableElement } from "./scene-diff";
+import { checkSceneInvariants, diffScene, elementIdentity, elementSignature, type DiffableElement } from "./scene-diff";
 
 function rect(id: string, nodeId: string, x = 0, y = 0): DiffableElement {
   return {
@@ -166,5 +166,64 @@ describe("容器 ↔ 标签重新绑定（修复：文字整个不渲染）", ()
     const outLabel = elements.find((e) => e.containerId === "el-a") as unknown as { id: string };
     expect(outLabel.id).toBe("same-label"); // 复用，随机 id 不会污染场景
     expect(stats.reused).toBeGreaterThan(0);
+  });
+});
+
+describe("checkSceneInvariants（开发期断言）", () => {
+  test("容器绑了不存在的文本 → 报出来", () => {
+    const elements = [
+      {
+        id: "el-a",
+        type: "rectangle",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 40,
+        boundElements: [{ id: "ghost-label", type: "text" }],
+      },
+    ];
+    const problems = checkSceneInvariants(elements as never);
+    expect(problems.length).toBe(1);
+    expect(problems[0]).toContain("不存在");
+  });
+
+  test("标签指回错的容器 → 报出来", () => {
+    const elements = [
+      { id: "el-a", type: "rectangle", x: 0, y: 0, width: 100, height: 40 },
+      { id: "el-b", type: "rectangle", x: 0, y: 0, width: 100, height: 40 },
+      {
+        id: "label-1",
+        type: "text",
+        x: 10,
+        y: 10,
+        width: 50,
+        height: 20,
+        containerId: "el-b",
+      },
+    ];
+    const problems = checkSceneInvariants(elements as never);
+    expect(problems.some((p) => p.includes("容器 el-b 不存在"))).toBe(false);
+    expect(problems).toEqual([]);
+  });
+
+  test("健康的场景没有告警", () => {
+    const elements = [
+      {
+        id: "el-a",
+        type: "rectangle",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 40,
+        boundElements: [{ id: "label-1", type: "text" }],
+      },
+      { id: "label-1", type: "text", x: 10, y: 10, width: 50, height: 20, containerId: "el-a" },
+    ];
+    expect(checkSceneInvariants(elements as never)).toEqual([]);
+  });
+
+  test("NaN 坐标 → 报出来", () => {
+    const elements = [{ id: "el-a", type: "rectangle", x: Number.NaN, y: 0, width: 1, height: 1 }];
+    expect(checkSceneInvariants(elements as never)[0]).toContain("坐标非法");
   });
 });

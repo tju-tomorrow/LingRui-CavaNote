@@ -38,6 +38,7 @@ import {
   type DiffableElement,
   type ElementSkeleton,
   type ExcalidrawLike,
+  checkSceneInvariants,
 } from "@lingrui/canvas";
 import { useAnnotations, useKnowledgeLayout, useKnowledgeNodes } from "./collab/useKnowledge";
 import { NODE_SIZE, type NodeLayout } from "./collab/seed";
@@ -179,6 +180,15 @@ export function CanvasStage() {
         current as unknown as DiffableElement[],
         desired as unknown as DiffableElement[],
       );
+
+      // 开发期断言：Excalidraw 的不变量被打破时**不报错、只是画不出来**
+      // （这次的「整张图文字消失」就是容器指向了不存在的标签 id）。
+      if (import.meta.env.DEV) {
+        const problems = checkSceneInvariants(elements as unknown as DiffableElement[]);
+        if (problems.length > 0) {
+          console.warn("[canvas] 场景不变量被打破：", problems.slice(0, 5));
+        }
+      }
 
       api.updateScene({
         elements: elements as unknown as SceneElement[],

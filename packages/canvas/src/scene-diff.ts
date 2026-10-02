@@ -61,6 +61,47 @@ export function elementSignature(element: DiffableElement): string {
   ].join(":");
 }
 
+/**
+ * 场景不变量检查（开发期用）。
+ *
+ * 为什么需要：Excalidraw 有一堆**沉默的不变量** —— 违反了不报错，只是「画不出来」。
+ * 这次的 binding 断裂就是例子：容器指向不存在的标签 id，于是整张图的文字消失，
+ * 控制台一行错都没有。类型系统管不了这种跨元素约束，只能靠断言。
+ *
+ * @returns 违反项（空 = 健康）
+ */
+export function checkSceneInvariants(elements: DiffableElement[]): string[] {
+  const problems: string[] = [];
+  const byId = new Map(elements.map((e) => [e.id, e]));
+
+  for (const element of elements) {
+    // 1) 容器 → 标签：boundElements 里的 text 必须真实存在，且反向指回来
+    const bound = (element as { boundElements?: Array<{ id: string; type: string }> | null })
+      .boundElements;
+    for (const binding of bound ?? []) {
+      if (binding.type !== "text") continue;
+      const label = byId.get(binding.id);
+      if (!label) {
+        problems.push(`${element.id} 绑定的文本 ${binding.id} 不存在`);
+      } else if (label.containerId !== element.id) {
+        problems.push(`${element.id} → ${binding.id}，但后者指回 ${label.containerId}`);
+      }
+    }
+
+    // 2) 标签 → 容器：containerId 必须真实存在（否则文字不会渲染）
+    if (element.containerId && !byId.has(element.containerId)) {
+      problems.push(`文本 ${element.id} 的容器 ${element.containerId} 不存在`);
+    }
+
+    // 3) 坐标不能是 NaN（画布会直接吞掉这类元素）
+    if (!Number.isFinite(element.x) || !Number.isFinite(element.y)) {
+      problems.push(`${element.id} 坐标非法：${element.x},${element.y}`);
+    }
+  }
+
+  return problems;
+}
+
 export interface DiffResult<T extends DiffableElement> {
   /** 可以直接交给 updateScene 的元素列表 */
   elements: T[];
