@@ -1,0 +1,35 @@
+{
+  "name": "@revideo/vite-plugin",
+  "version": "0.11.0",
+  "description": "A Vite plugin for revideo projects",
+  "main": "lib/index.js",
+  "author": "revideo",
+  "homepage": "https://re.video/",
+  "bugs": "https://github.com/midrender/revideo/issues",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsc -w",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/midrender/revideo.git"
+  },
+  "files": [
+    "lib"
+  ],
+  "devDependencies": {
+    "@revideo/telemetry": "0.11.0",
+    "@types/follow-redirects": "^1.14.1",
+    "@types/formidable": "^3.4.5",
+    "@types/mime-types": "^3.0.1"
+  },
+  "dependencies": {
+    "@revideo/ffmpeg": "0.11.0",
+    "fast-glob": "^3.3.1",
+    "follow-redirects": "^1.15.2",
+    "formidable": "^3.5.1",
+    "mime-types": "^3.0.2",
+    "source-map": "^0.7.6"
+  }
+}

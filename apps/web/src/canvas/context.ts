@@ -1,12 +1,11 @@
 /**
- * 冻结画布上下文（ADR-0011 决策 4）
+ * 冻结画布上下文（ADR-0011 决策 4 / ADR-0013 引擎换成 maxGraph）
  *
  * 一次 freeze 里同时产出：
- *   - 截图（整幅、2x 超采样、白底，排除临时选中框）
+ *   - 截图（当前视口，白底）
  *   - CanvasSnapshot（可寻址 id）
  * 两者共用同一个 version，避免漂移。
  */
-import { exportToBlob } from "@excalidraw/excalidraw";
 import {
   createScreenshotCache,
   freezeContext,
@@ -16,6 +15,7 @@ import {
 import { ydoc } from "../collab/doc";
 import { getFocus } from "../state/focus";
 import { getCanvas } from "./bridge";
+import { exportViewportPng } from "./snapshot";
 
 /** 单调递增：保证「截图与数据同一时刻」 */
 let version = 0;
@@ -27,52 +27,27 @@ export function currentContextVersion(): number {
   return version;
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("读取截图失败"));
-    reader.readAsDataURL(blob);
-  });
-}
-
 /**
  * 截图失败不应阻塞回灌 —— 只给数据也能让 AI 改得精确，
  * 只是少了「视觉意图」那一层。
  */
 async function captureScreenshot(): Promise<string | undefined> {
-  const api = getCanvas();
-  if (!api) return undefined;
+  const engine = getCanvas();
+  if (!engine) return undefined;
 
-  const appState = api.getAppState();
-  const fingerprint = sceneFingerprint(api.getSceneElements(), {
-    scrollX: appState.scrollX,
-    scrollY: appState.scrollY,
-    zoom: appState.zoom.value,
+  const viewport = engine.viewport();
+  const fingerprint = sceneFingerprint(engine.elements(), {
+    scrollX: viewport.scrollX,
+    scrollY: viewport.scrollY,
+    zoom: viewport.zoom,
   });
 
-  // 画布没变就复用上一次的截图
   const cached = screenshotCache.get(fingerprint);
   if (cached) return cached;
 
   try {
-    const blob = await exportToBlob({
-      elements: api.getSceneElements(),
-      appState: {
-        ...appState,
-        exportBackground: true,
-        viewBackgroundColor: "#ffffff",
-        exportWithDarkMode: false,
-        // 排除临时选中框
-        selectedElementIds: {},
-      },
-      files: api.getFiles(),
-      // 2x 超采样
-      getDimensions: (width: number, height: number) => ({ width, height, scale: 2 }),
-      mimeType: "image/png",
-      exportPadding: 16,
-    });
-    const screenshot = await blobToDataUrl(blob);
+    const screenshot = await exportViewportPng({ scale: 2, background: "#ffffff" });
+    if (!screenshot) return undefined;
     screenshotCache.set(fingerprint, screenshot);
     return screenshot;
   } catch {
@@ -81,22 +56,25 @@ async function captureScreenshot(): Promise<string | undefined> {
 }
 
 export async function freezeCanvasContext(): Promise<FrozenContext | null> {
-  const api = getCanvas();
-  if (!api) return null;
-
-  const state = api.getAppState();
+  const engine = getCanvas();
+  // 画布收起时引擎未挂载，但**结构化数据仍在 Y.Doc 里**。
+  // 之前直接 return null → AI 既没截图也没数据，连「这张图怎么走」都答不了。
+  // 现在退回「无截图、有数据」：截图缺失不阻塞回灌（见 captureScreenshot 注释）。
+  const viewport = engine
+    ? engine.viewport()
+    : {
+        scrollX: 0,
+        scrollY: 0,
+        zoom: 1,
+        width: typeof window === "undefined" ? 0 : window.innerWidth,
+        height: typeof window === "undefined" ? 0 : window.innerHeight,
+      };
   const screenshot = await captureScreenshot();
 
   version += 1;
   const frozen = freezeContext(ydoc, {
     version,
-    viewport: {
-      scrollX: state.scrollX,
-      scrollY: state.scrollY,
-      zoom: state.zoom.value,
-      width: state.width,
-      height: state.height,
-    },
+    viewport,
     focus: getFocus() ?? undefined,
     screenshot,
   });

@@ -1,16 +1,11 @@
 /**
- * 分镜缩略图缓存（PRD/演出层.md §4：「在 t = startT 对画布离屏截图，缓存；
- * 内容变化时失效重建」）
+ * 分镜缩略图缓存（PRD/演出层.md §4 / ADR-0013 引擎换成 maxGraph）
  *
- * 实现取舍：**懒截图**。
- * 真的为每个分镜去 seek 一遍再截图，会打断用户的播放（seek 有副作用、还会触发联动）。
- * 所以改成：**播到/拖到哪个分镜，就截哪一张** —— 非侵入，且用户看过的分镜立刻有真图。
- * 没看过的分镜仍然显示 SVG 迷你示意图（不是空白）。
- *
- * 失效：场景元素数变了就重截（AI 改过画布 → 旧图不再代表现状）。
+ * 懒截图：播到/拖到哪个分镜，就截哪一张。没看过的分镜仍显示 SVG 迷你示意图。
+ * 失效：场景元素数变了就重截。
  */
-import { exportToBlob } from "@excalidraw/excalidraw";
 import { getCanvas } from "../canvas/bridge";
+import { exportViewportPng } from "../canvas/snapshot";
 
 interface Thumb {
   url: string;
@@ -40,15 +35,6 @@ export function clearThumbs(): void {
   emit();
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
-
 let inFlight = false;
 
 /**
@@ -56,37 +42,18 @@ let inFlight = false;
  * 失败静默（截图只是锦上添花，不能影响演出）。
  */
 export async function captureThumb(shotId: string): Promise<void> {
-  const api = getCanvas();
-  if (!api || inFlight) return;
+  const engine = getCanvas();
+  if (!engine || inFlight) return;
 
-  const elements = api.getSceneElements();
-  const sceneSize = elements.length;
+  const sceneSize = engine.elements().length;
   const cached = cache.get(shotId);
   if (cached && cached.sceneSize === sceneSize) return;
 
   inFlight = true;
   try {
-    const appState = api.getAppState();
-    const blob = await exportToBlob({
-      elements,
-      appState: {
-        ...appState,
-        exportBackground: true,
-        viewBackgroundColor: "#ffffff",
-        exportWithDarkMode: false,
-        selectedElementIds: {},
-      },
-      files: api.getFiles(),
-      // 小图：缩略图条里只有 ~150px 宽
-      getDimensions: (width: number, height: number) => ({
-        width: 320,
-        height: Math.max(1, Math.round((320 * height) / Math.max(1, width))),
-        scale: 1,
-      }),
-      mimeType: "image/png",
-      exportPadding: 8,
-    });
-    cache.set(shotId, { url: await blobToDataUrl(blob), sceneSize });
+    const url = await exportViewportPng({ width: 320, background: "#ffffff" });
+    if (!url) return;
+    cache.set(shotId, { url, sceneSize });
     emit();
   } catch {
     /* 截图失败不影响演出 */

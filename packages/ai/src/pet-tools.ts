@@ -1,7 +1,7 @@
 /**
  * @lingrui/ai — Personal Pet 工具（见 `PRD/宠物.md` §6）
  *
- * 与 `CANVAS_TOOLS` 同构：AI（或本地 planner）调用，executor 落到 Y.Doc。
+ * 与 `CANVAS_TOOLS` 同构：AI 调用，executor 落到 Y.Doc。
  * 这里只动 `@lingrui/knowledge` 的 pet root，不碰画布。
  */
 import type * as Y from "yjs";
@@ -222,15 +222,6 @@ function slug(text: string): string {
   );
 }
 
-/** 去掉口语前缀/量词，留下名字本体 */
-function cleanName(s: string): string {
-  return s
-    .replace(/^(养|创建|生成|添加|加|来|给我|做|要|画)/, "")
-    .replace(/^(一只|一个|一条|只|个)/, "")
-    .replace(/^的/, "")
-    .trim();
-}
-
 function pixelAvatar(palette: string[], seed: number): PetAvatar {
   return { kind: "pixel", palette, seed, scale: 4 };
 }
@@ -320,49 +311,6 @@ function deletePet(doc: Y.Doc, input: DeletePetInput): PetToolResult {
   if (!readPet(doc, input.id)) return { ok: false, message: `宠物不存在：${input.id}` };
   removePet(doc, input.id);
   return { ok: true, message: `已删除宠物 ${input.id}。` };
-}
-
-// ---------------------------------------------------------------------------
-// 本地 planner（无 LLM 时的降级路径，与 canvas planner 同思路）
-// ---------------------------------------------------------------------------
-
-export interface PetPlan {
-  calls: PetToolCall[];
-  reply: string;
-}
-
-/** "养一只蓝色的猫老师" → createPet */
-export function planPet(message: string, ctx: { hasPets: boolean }): PetPlan {
-  const text = message.trim();
-  if (!text) return { calls: [], reply: "" };
-
-  const wantsPet = /(宠物|养一|养只|养个|当老师|讲解老师|伴读|伙伴)/.test(text);
-  if (!wantsPet) return { calls: [], reply: "" };
-
-  const named = /叫\s*([^\s，。,.!！?？的]+)/.exec(text)?.[1]?.trim();
-  const color = bodyColorFromText(text);
-
-  // 优先“…的X老师/宠物/伙伴”里的 X
-  let derived: string | undefined;
-  const m = /([^\s，。,.!！?？]{1,6})(老师|宠物|伙伴|伴读)/.exec(text);
-  if (m?.[1] && m[2]) {
-    const base = cleanName(m[1].split("的").pop() ?? "");
-    derived = `${base || m[2]}`;
-    if (base && !derived.includes(m[2])) derived = `${base}${m[2]}`;
-  }
-
-  const name = named ?? derived ?? (color ? "老师宠" : "老师宠");
-
-  const call: PetToolCall = {
-    name: "createPet",
-    input: { name, ...(color ? { palette: paletteFromColor(color) } : {}) },
-  };
-  return {
-    calls: [call],
-    reply: ctx.hasPets
-      ? `好的，我又养了一只「${name}」当你的老师。`
-      : `好，我养了一只「${name}」当你的讲解老师。`,
-  };
 }
 
 export { DEFAULT_PET };

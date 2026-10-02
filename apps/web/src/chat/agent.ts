@@ -1,17 +1,13 @@
 /**
- * 聊天 Agent —— 把用户的自然语言变成"改画布 + 回话"
+ * 聊天 Agent —— 把模型的工具调用落到 Y.Doc
  *
- * 两条路径：
- *   1. 有 LLM：/api/chat 返回文本增量 + tool 调用 → runToolCall 落到 Y.Doc
- *   2. 无 LLM：本地 planner（packages/ai/src/planner.ts）产出同样的 tool 调用
- *
- * 两条路径共用同一个 executor，所以"AI 自己画节点"的能力不依赖模型是否存在。
+ * AI 是硬依赖：`/api/chat` 返回 NDJSON（文本增量 + tool 调用），
+ * 统一走 `runToolCall` 写画布 / 笔记。
+ * 本地 planner（`runAgent` / `chat/explain.ts`）已删除 —— 见 git 历史。
  */
 import {
   executePetTool,
   executeTool,
-  plan,
-  planPet,
   toCanvasToolCall,
   toPetToolCall,
   type CanvasToolCall,
@@ -19,33 +15,44 @@ import {
   type ToolResult,
 } from "@lingrui/ai";
 import {
+  addNodesToCanvas,
+  createCanvas,
   getNodes,
   listChapters,
-  listPets,
   readNode,
   replaceChapters,
+  replaceCanvasChapters,
   upsertNode,
 } from "@lingrui/knowledge";
-import type * as Y from "yjs";
+import * as Y from "yjs";
 import { deriveShots, type Action } from "@lingrui/anim";
-import { ROOT_TIMELINE } from "@lingrui/knowledge";
+import { ROOT_TIMELINE, ROOT_TIMELINES } from "@lingrui/knowledge";
 import { ydoc } from "../collab/doc";
-import { layoutSnapshot } from "../collab/layout";
-import { NODE_SIZE } from "../collab/seed";
-import { upsertNodeCard } from "../editor/bridge";
-import { getFocus, setFocus } from "../state/focus";
+import {
+  appendNoteParagraph,
+  insertCanvasEmbed,
+  insertKnowledgeCard,
+  upsertNodeCard,
+} from "../editor/bridge";
+import { setFocus } from "../state/focus";
+import { getActiveCanvas, setActiveCanvas } from "../state/canvas";
+import { getActiveNote } from "../state/notes";
 import { beginRound } from "../state/history";
 import { pushPending } from "../state/pending";
-import { pushRoundChange, startRoundChanges } from "../state/round";
-import { autoSnapshot, autoSnapshotThrottled } from "../shell/snapshot";
+import { pushRoundChange } from "../state/round";
+import { autoSnapshotThrottled } from "../shell/snapshot";
 import { player } from "../state/player";
-import { buildReply } from "./explain";
 
 /** 时间轴游标：每次交互往后推进，动作流因此天然有序（P2 的时间轴会消费它） */
 let cursor = 0;
-/** 上一轮 AI 生成的节点，用于"把它连到 X" */
-let lastSpawnedId: string | undefined;
 const timeline: Action[] = [];
+
+/** 把新节点挂到当前概念画布（打开了某张画布时才做） */
+function attachToActiveCanvas(nodeId: string, at: readonly [number, number]): void {
+  const canvasId = getActiveCanvas();
+  if (!canvasId) return;
+  addNodesToCanvas(ydoc, canvasId, [nodeId], { [nodeId]: { x: at[0], y: at[1] } });
+}
 
 function applyToolResult(result: ToolResult): string {
   pushActions(result.actions);
@@ -71,19 +78,20 @@ function shotsOf() {
   const derived = deriveShots(timeline, (id) => nodes.get(id)?.title);
   if (derived.length === 0) return derived;
 
-  const persisted = listChapters(ydoc);
+  const persisted = listChapters(ydoc, getActiveCanvas() ?? undefined);
   const edited = persisted.some((c) => c.source === "manual");
   if (!edited) {
-    replaceChapters(
-      ydoc,
-      derived.map((s, i) => ({
-        id: s.id,
-        title: s.title,
-        order: i,
-        startT: s.startT,
-        source: "auto" as const,
-      })),
-    );
+    const chapters = derived.map((s, i) => ({
+      id: s.id,
+      title: s.title,
+      order: i,
+      startT: s.startT,
+      source: "auto" as const,
+    }));
+    const canvasId = getActiveCanvas();
+    // 画布是完整资产：分镜按画布隔离，切画布不会串场
+    if (canvasId) replaceCanvasChapters(ydoc, canvasId, chapters);
+    else replaceChapters(ydoc, chapters);
   }
   return derived;
 }
@@ -167,7 +175,70 @@ function targetNodeOf(call: CanvasToolCall): string | undefined {
 }
 
 /** 执行一次画布工具调用，返回给用户看的短句 */
+/**
+ * LingRui Script（`direct` 工具）：把有序节拍展开成逐个工具调用。
+ * 每一拍先执行 `do`，再按需执行一次 `narrate` 把 `say` 说出来。
+ */
+function runDirect(input: unknown): string {
+  const beats = (input as { beats?: unknown } | null)?.beats;
+  if (!Array.isArray(beats) || beats.length === 0) {
+    return "\n\n（direct 需要非空 beats 数组）";
+  }
+  let out = "";
+  for (const raw of beats) {
+    if (!raw || typeof raw !== "object") continue;
+    const beat = raw as Record<string, unknown>;
+    const tool = beat["do"];
+    if (typeof tool !== "string" || tool === "direct") continue;
+
+    const args: Record<string, unknown> = { ...beat };
+    delete args["do"];
+    delete args["say"];
+    out += runToolCall(tool, args);
+
+    const say = beat["say"];
+    if (typeof say === "string" && say.trim()) {
+      const nodeId =
+        typeof args["nodeId"] === "string"
+          ? args["nodeId"]
+          : typeof args["id"] === "string"
+            ? args["id"]
+            : undefined;
+      out += runToolCall("narrate", { text: say, ...(nodeId ? { nodeId } : {}) });
+    }
+  }
+  return out;
+}
+
 export function runToolCall(name: string, input: unknown): string {
+  // LingRui Script：一次给出整段有序节拍
+  if (name === "direct") return runDirect(input);
+
+  // 写笔记（扩展笔记，而不是改画布）
+  if (name === "writeNote") {
+    const args = (input ?? {}) as { text?: unknown; nodeId?: unknown };
+    const nodeId = typeof args.nodeId === "string" ? args.nodeId : "";
+    if (nodeId) {
+      const ok = insertKnowledgeCard(nodeId);
+      return ok ? `\n\n📝 已把「${nodeId}」写入笔记` : "\n\n（该节点已在笔记里，或编辑器未就绪）";
+    }
+    const text = typeof args.text === "string" ? args.text : "";
+    const ok = appendNoteParagraph(text);
+    return ok ? "\n\n📝 已写入笔记" : "\n\n（编辑器未就绪或内容为空，未写入笔记）";
+  }
+
+  // 新建一张概念画布，并嵌进当前笔记
+  if (name === "newCanvas") {
+    const args = (input ?? {}) as { title?: unknown; noteId?: unknown };
+    const title =
+      typeof args.title === "string" && args.title.trim() ? args.title.trim() : "新概念画布";
+    const noteId = typeof args.noteId === "string" ? args.noteId : (getActiveNote() ?? undefined);
+    const canvas = createCanvas(ydoc, title, noteId);
+    setActiveCanvas(canvas.id);
+    const embedded = insertCanvasEmbed(canvas.id);
+    return `\n\n🗂 已新建概念画布「${title}」${embedded ? "，并嵌入笔记" : ""}`;
+  }
+
   // 宠物工具优先（两个工具名空间不重叠）
   const pet = toPetToolCall(name, input);
   if (!("error" in pet)) return runPetTool(pet);
@@ -179,12 +250,15 @@ export function runToolCall(name: string, input: unknown): string {
   beginRound();
   // 动手前自动打点（同一轮内节流成一个点）—— 这样「回到 AI 改之前」永远可用
   autoSnapshotThrottled(`AI：${call.name}`);
-  const result = executeTool({ doc: ydoc, t: cursor }, call);
+  const result = executeTool(
+    { doc: ydoc, t: cursor, canvasId: getActiveCanvas() ?? undefined },
+    call,
+  );
   if (result.ok) {
     if (call.name === "focus") setFocus(call.input.nodeId);
     if (call.name === "spawnNode") {
       setFocus(call.input.id);
-      lastSpawnedId = call.input.id;
+      attachToActiveCanvas(call.input.id, call.input.at);
     }
     if (call.name === "spawnNode" || call.name === "updateNode") syncNodeToDocument(call.input.id);
   }
@@ -199,83 +273,6 @@ export function runToolCall(name: string, input: unknown): string {
   // 本轮从 startT 起自动播放（让宠物真地演一遍）
   if (result.ok) player.load(exportedTimeline(), "AI 演出", startT, shotsOf());
   return message;
-}
-
-export interface AgentTurn {
-  reply: string;
-  toolResults: ToolResult[];
-}
-
-/** 本地路径：planner → executor → 回话 */
-export function runAgent(message: string): AgentTurn {
-  // 宠物意图优先："养一只蓝色的猫老师"
-  const petPlan = planPet(message, { hasPets: listPets(ydoc).length > 0 });
-  if (petPlan.calls.length > 0) {
-    const notes: string[] = [];
-    for (const call of petPlan.calls) {
-      const result = executePetTool(ydoc, call);
-      if (!result.ok) notes.push(`\n\n（${result.message}）`);
-    }
-    return { reply: petPlan.reply + notes.join(""), toolResults: [] };
-  }
-
-  const nodes = [...getNodes(ydoc).values()];
-  const layout = layoutSnapshot();
-  // 传矩形而不是点：否则新节点算不出真正的空位（会压在已有节点上）
-  const occupied = nodes.map((n) => {
-    const at = layout[n.id] ?? { x: 0, y: 0 };
-    return { x: at.x, y: at.y, width: NODE_SIZE.width, height: NODE_SIZE.height };
-  });
-
-  const p = plan(message, {
-    t: cursor,
-    nodes,
-    occupied,
-    lastSpawnedId,
-    nodeSize: NODE_SIZE,
-    // 供"移到 X 旁边"计算空位用
-    positions: layout,
-  });
-  const toolResults: ToolResult[] = [];
-  const startT = cursor;
-  const notes: string[] = [];
-
-  // 这一轮的写入归为一个 undo 批次；清单也重新开始记
-  beginRound();
-  startRoundChanges();
-  // 动手前自动打点：这样「回到 AI 改之前」是可用的（不是只有手动保存才有退路）
-  if (p.calls.length > 0) autoSnapshot(`AI：${message.slice(0, 12)}`);
-
-  for (const call of p.calls) {
-    const result = executeTool({ doc: ydoc, t: cursor }, call);
-    toolResults.push(result);
-    // 复用 applyToolResult：内含时间轴累加 + 游标推进 + pending 挂起
-    notes.push(applyToolResult(result));
-    pushRoundChange({
-      tool: call.name,
-      label: describeChange(call, result.ok, Boolean(result.pending)),
-      nodeId: targetNodeOf(call),
-      pending: !result.applied && Boolean(result.pending),
-    });
-
-    if (result.ok) {
-      if (call.name === "focus") setFocus(call.input.nodeId);
-      if (call.name === "spawnNode") {
-        setFocus(call.input.id);
-        lastSpawnedId = call.input.id;
-      }
-      // 节点类写入 → 同步到文档并双绑 blockIds（幂等）
-      if (call.name === "spawnNode" || call.name === "updateNode") syncNodeToDocument(call.input.id);
-    }
-  }
-  cursor += 2;
-
-  // 本轮产生了动作 → 装载时间轴并从本轮起点自动播放
-  if (toolResults.some((r) => r.ok)) player.load(exportedTimeline(), "AI 演出", startT, shotsOf());
-
-  // 把工具做了什么（含"需要你确认"）回显给用户
-  const reply = (p.reply || buildReply(message, getFocus())) + notes.join("");
-  return { reply, toolResults };
 }
 
 /** P2 的时间轴会从这里取动作流 */
@@ -296,24 +293,64 @@ export function exportedTimeline(): Action[] {
 function pushActions(actions: Action[]): void {
   if (actions.length === 0) return;
   timeline.push(...actions);
-  timelineArray().push(actions);
+  timelineArrayFor(getActiveCanvas()).push(actions);
 }
 
-function timelineArray(): Y.Array<Action> {
-  return ydoc.getArray<Action>(ROOT_TIMELINE);
+/** 没有 active canvas 时的桶（旧全局数据也迁到这里） */
+const GLOBAL_TIMELINE_KEY = "__global__";
+
+function timelineKey(canvasId: string | null): string {
+  return canvasId ?? GLOBAL_TIMELINE_KEY;
+}
+
+function timelinesMap(): Y.Map<Y.Array<Action>> {
+  return ydoc.getMap<Y.Array<Action>>(ROOT_TIMELINES);
+}
+
+/** 读取某张画布已存的演出（不创建） */
+function storedTimeline(canvasId: string | null): Y.Array<Action> | undefined {
+  return timelinesMap().get(timelineKey(canvasId));
+}
+
+/** 写入用：拿到（必要时创建）某张画布的演出数组 */
+function timelineArrayFor(canvasId: string | null): Y.Array<Action> {
+  const map = timelinesMap();
+  const key = timelineKey(canvasId);
+  let array = map.get(key);
+  if (!array) {
+    array = new Y.Array<Action>();
+    map.set(key, array);
+  }
+  return array;
+}
+
+/** 旧数据迁移：把 ROOT_TIMELINE 那个全局数组搬进 __global__ 桶（只做一次） */
+function migrateLegacyTimeline(): void {
+  const map = timelinesMap();
+  if (map.size > 0) return;
+  const legacy = ydoc.getArray<Action>(ROOT_TIMELINE);
+  if (legacy.length === 0) return;
+  timelineArrayFor(null).push(legacy.toArray());
 }
 
 /**
- * 从 Y.Doc 恢复演出（应用启动时调一次）。
+ * 把某张画布的演出装进内存 + 播放器（切画布 / 启动时调）。
  *
- * 同时把内存游标推到末尾：新的一轮接着老的动作流继续排，不会时间倒流。
+ * 画布是完整资产：切画布 = 换一套演出，不会串场。
+ * 同时把内存游标推到末尾，新的一轮接着老的动作流继续排，不会时间倒流。
  */
-export function hydrateTimeline(): boolean {
-  const stored = timelineArray().toArray();
-  if (stored.length === 0) return false;
+export function hydrateTimeline(canvasId: string | null = getActiveCanvas()): boolean {
+  migrateLegacyTimeline();
+  const stored = storedTimeline(canvasId)?.toArray() ?? [];
 
   timeline.length = 0;
   timeline.push(...stored);
+
+  if (stored.length === 0) {
+    cursor = 0;
+    player.clear();
+    return false;
+  }
 
   const last = stored.reduce((max, a) => Math.max(max, a.t), 0);
   cursor = last + 1.5;
@@ -323,11 +360,11 @@ export function hydrateTimeline(): boolean {
   return true;
 }
 
-/** 清空演出（设置里的「重来」用得上） */
+/** 清空当前画布的演出 */
 export function clearTimeline(): void {
   timeline.length = 0;
   cursor = 0;
-  const array = timelineArray();
-  if (array.length > 0) array.delete(0, array.length);
+  const array = storedTimeline(getActiveCanvas());
+  if (array && array.length > 0) array.delete(0, array.length);
   player.clear();
 }

@@ -180,3 +180,8 @@ export function formatTime(sec: number): string {
   const s = Math.max(0, Math.floor(sec));
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
+
+// 开发期调试入口：控制台 __player.load([...]) 可直接驱动一场演出（验证表现力层用）
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as Record<string, unknown>)["__player"] = player;
+}

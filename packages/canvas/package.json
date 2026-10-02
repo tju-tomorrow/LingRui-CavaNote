@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@lingrui/knowledge": "workspace:*"
+    "@lingrui/knowledge": "workspace:*",
+    "@maxgraph/core": "^0.24.0"
   }
 }

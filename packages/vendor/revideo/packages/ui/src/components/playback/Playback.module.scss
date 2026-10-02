@@ -1,0 +1,20 @@
+.progress {
+  height: 2px;
+  background-color: var(--background-color-dark);
+}
+
+.progressFill {
+  height: 2px;
+  background-color: var(--theme);
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+
+  select,
+  input {
+    width: 100px;
+  }
+}

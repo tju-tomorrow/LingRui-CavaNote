@@ -19,6 +19,10 @@ import { ydoc } from "../collab/doc";
 import { useKnowledgeNodes, useKnowledgeNotes } from "../collab/useKnowledge";
 import { setFocus } from "../state/focus";
 import { setActiveNote } from "../state/notes";
+import { jevRerank } from "../chat/systemone";
+import { Badge } from "../components/ui/badge";
+import { Dialog, DialogContent } from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
 
 type HitType = "note" | "node";
 
@@ -137,7 +141,16 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
     void (async () => {
       const res = await search(db, { term: kw, limit: 12, properties: ["text", "title"] });
-      if (!cancelled) setResults(res.hits.map((h) => h.document as unknown as Hit));
+      if (cancelled) return;
+      let hits = res.hits.map((h) => h.document as unknown as Hit);
+      // Jev 精排：用 noul 概率重排（threshold 0 = 只重排不过滤，
+      // 别把用户明确搜的词藏起来）。未配 key / 失败 → null，保留 Orama 顺序。
+      const reranked = await jevRerank(kw, hits, (h) => `${h.title} ${h.summary} ${h.kind}`, {
+        threshold: 0,
+      });
+      if (cancelled) return;
+      if (reranked) hits = reranked.map((r) => r.item);
+      setResults(hits);
     })();
 
     return () => {
@@ -157,11 +170,19 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <div className="palette-mask" onClick={onClose}>
-      <div className="palette" onClick={(e) => e.stopPropagation()}>
-        <input
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="top-[15%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
+      >
+        <Input
           ref={inputRef}
-          className="palette-input"
+          className="h-12 rounded-none border-0 border-b px-4 text-[15px] shadow-none focus-visible:ring-0"
           placeholder="搜索笔记、知识节点…（跨全部笔记）"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -169,20 +190,28 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             if (e.key === "Enter" && results[0]) pick(results[0]);
           }}
         />
-        <ul className="palette-list">
+        <ul className="max-h-[46vh] overflow-auto p-2">
           {groups.map((group) => {
             const items = results.filter((r) => r.type === group.type);
             if (items.length === 0) return null;
             return (
-              <li key={group.type} className="palette-group">
-                <div className="palette-group-label">{group.label}</div>
+              <li key={group.type}>
+                <div className="px-2.5 pt-3 pb-1 text-xs font-medium text-muted-foreground">
+                  {group.label}
+                </div>
                 <ul>
                   {items.map((r) => (
                     <li key={`${r.type}-${r.id}`}>
-                      <button type="button" className="palette-item" onClick={() => pick(r)}>
-                        <span className="palette-kind">{r.kind}</span>
-                        <span className="palette-title">{r.title}</span>
-                        <span className="palette-sub">{r.summary}</span>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition hover:bg-accent"
+                        onClick={() => pick(r)}
+                      >
+                        <Badge variant="muted" className="shrink-0 text-[10px]">
+                          {r.kind}
+                        </Badge>
+                        <span className="shrink-0 font-medium">{r.title}</span>
+                        <span className="truncate text-muted-foreground">{r.summary}</span>
                       </button>
                     </li>
                   ))}
@@ -190,9 +219,11 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               </li>
             );
           })}
-          {results.length === 0 ? <li className="palette-empty">没有匹配的内容</li> : null}
+          {results.length === 0 ? (
+            <li className="p-4 text-[13px] text-muted-foreground">没有匹配的内容</li>
+          ) : null}
         </ul>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

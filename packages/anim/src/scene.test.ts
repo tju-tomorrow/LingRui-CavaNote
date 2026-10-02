@@ -84,3 +84,41 @@ describe("旁白跟随焦点（修复：字幕与聚光灯错位）", () => {
     expect(s.narration?.nodeId).toBe("b");
   });
 });
+
+describe("手绘强调（emphasize）", () => {
+  const actions: Action[] = [
+    { t: 0, kind: "node.spawn", nodeId: "a", at: [0, 0] },
+    { t: 1, kind: "emphasize", nodeId: "a", style: "circle" },
+  ];
+  const script: SceneScript = { id: "em", title: "强调", duration: 12, actions };
+
+  test("动作前没有强调", () => {
+    expect(sampleAt(script, 0.5).emphases).toHaveLength(0);
+  });
+
+  test("描出中：draw 在 0→1 之间", () => {
+    const s = sampleAt(script, 1.3);
+    expect(s.emphases).toHaveLength(1);
+    expect(s.emphases[0]!.draw).toBeGreaterThan(0);
+    expect(s.emphases[0]!.draw).toBeLessThan(1);
+  });
+
+  test("保持期：draw=1、opacity=1", () => {
+    const s = sampleAt(script, 2.5);
+    expect(s.emphases[0]!.draw).toBe(1);
+    expect(s.emphases[0]!.opacity).toBe(1);
+  });
+
+  test("超时后淡出并清掉（不应永久停留）", () => {
+    expect(sampleAt(script, 5).emphases).toHaveLength(0);
+  });
+
+  test("同节点同一样式只保留最新一次", () => {
+    const twice: Action[] = [
+      ...actions,
+      { t: 3, kind: "emphasize", nodeId: "a", style: "circle" },
+    ];
+    const s = sampleAt({ ...script, actions: twice }, 3.2);
+    expect(s.emphases.filter((e) => e.style === "circle")).toHaveLength(1);
+  });
+});

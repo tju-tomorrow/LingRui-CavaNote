@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import {
   getAnnotations,
+  getCanvases,
   getChapters,
   getLayout,
   getNodes,
@@ -13,8 +14,10 @@ import {
   getOrder,
   listChapters,
   listNotes,
+  listTrashedNotes,
   noteText,
   type Annotation,
+  type CanvasMeta,
   type Chapter,
   type KnowledgeNode,
   type NoteMeta,
@@ -40,11 +43,15 @@ function snapshot(): KnowledgeNode[] {
   return out;
 }
 
-export function useKnowledgeNodes(): KnowledgeNode[] {
-  const [nodes, setNodes] = useState<KnowledgeNode[]>(() => snapshot());
+/**
+ * 知识节点列表；默认过滤已回收资产（trashedAt），回收站视图传 `{ includeTrashed: true }`。
+ * 画布 / 文档 / Agent 拿到的都是活资产（ADR-0014）。
+ */
+export function useKnowledgeNodes(opts?: { includeTrashed?: boolean }): KnowledgeNode[] {
+  const [nodes, setNodes] = useState<KnowledgeNode[]>(() => applyFilter(snapshot(), opts));
 
   useEffect(() => {
-    const update = () => setNodes(snapshot());
+    const update = () => setNodes(applyFilter(snapshot(), opts));
     update();
     const nodesMap = getNodes(ydoc);
     const order = getOrder(ydoc);
@@ -57,6 +64,10 @@ export function useKnowledgeNodes(): KnowledgeNode[] {
   }, []);
 
   return nodes;
+}
+
+function applyFilter(nodes: KnowledgeNode[], opts?: { includeTrashed?: boolean }): KnowledgeNode[] {
+  return opts?.includeTrashed ? nodes : nodes.filter((n) => !n.trashedAt);
 }
 
 export function useKnowledgeLayout(): NodeLayout {
@@ -74,8 +85,10 @@ export function useKnowledgeLayout(): NodeLayout {
 }
 
 /** 按 id 排序的注释列表（排序是为了让依赖它的 memo 稳定） */
-function listAnnotations(): Annotation[] {
-  return [...getAnnotations(ydoc).values()].sort((a, b) => a.id.localeCompare(b.id));
+function listAnnotations(canvasId?: string | null): Annotation[] {
+  const all = [...getAnnotations(ydoc).values()].sort((a, b) => a.id.localeCompare(b.id));
+  // 画布是完整资产：有 active canvas 就只显示它的注释，避免串场
+  return canvasId ? all.filter((a) => a.canvasId === canvasId) : all;
 }
 
 /**
@@ -83,17 +96,19 @@ function listAnnotations(): Annotation[] {
  *
  * 这是「Annotation 是一等公民」在读取侧的体现：手绘/便签不再只是
  * Excalidraw 内存里的 foreign element，而是进 Y.Doc、可持久化、可协同、可被 AI 引用。
+ *
+ * 传 `canvasId` 就只订阅那张画布的注释（概念画布互相隔离）。
  */
-export function useAnnotations(): Annotation[] {
-  const [annotations, setAnnotations] = useState<Annotation[]>(() => listAnnotations());
+export function useAnnotations(canvasId?: string | null): Annotation[] {
+  const [annotations, setAnnotations] = useState<Annotation[]>(() => listAnnotations(canvasId));
 
   useEffect(() => {
-    const update = () => setAnnotations(listAnnotations());
+    const update = () => setAnnotations(listAnnotations(canvasId));
     update();
     const map = getAnnotations(ydoc);
     map.observe(update);
     return () => map.unobserve(update);
-  }, []);
+  }, [canvasId]);
 
   return annotations;
 }
@@ -104,16 +119,16 @@ export function useAnnotations(): Annotation[] {
  * 分镜最初由动作流推导种进来（见 chat/agent.ts 的 shotsOf），
  * 之后人工编辑改的都是这份 → 这里永远是最新且可持续化的。
  */
-export function useKnowledgeChapters(): Chapter[] {
-  const [chapters, setChapters] = useState<Chapter[]>(() => listChapters(ydoc));
+export function useKnowledgeChapters(canvasId?: string | null): Chapter[] {
+  const [chapters, setChapters] = useState<Chapter[]>(() => listChapters(ydoc, canvasId ?? undefined));
 
   useEffect(() => {
-    const update = () => setChapters(listChapters(ydoc));
+    const update = () => setChapters(listChapters(ydoc, canvasId ?? undefined));
     update();
     const arr = getChapters(ydoc);
     arr.observe(update);
     return () => arr.unobserve(update);
-  }, []);
+  }, [canvasId]);
 
   return chapters;
 }
@@ -129,6 +144,21 @@ export function useKnowledgeNotes(): NoteMeta[] {
 
   useEffect(() => {
     const update = () => setNotes(listNotes(ydoc));
+    update();
+    const map = getNotes(ydoc);
+    map.observe(update);
+    return () => map.unobserve(update);
+  }, []);
+
+  return notes;
+}
+
+/** 回收站里的笔记（最近删的在前）—— 回收站视图用 */
+export function useTrashedNotes(): NoteMeta[] {
+  const [notes, setNotes] = useState<NoteMeta[]>(() => listTrashedNotes(ydoc));
+
+  useEffect(() => {
+    const update = () => setNotes(listTrashedNotes(ydoc));
     update();
     const map = getNotes(ydoc);
     map.observe(update);
@@ -166,4 +196,49 @@ export function useNoteText(note: NoteMeta | undefined): string {
 export function useKnowledgeNode(nodeId: string | undefined): KnowledgeNode | undefined {
   const nodes = useKnowledgeNodes();
   return nodeId ? nodes.find((n) => n.id === nodeId) : undefined;
+}
+
+/**
+ * 订阅概念画布列表（可按笔记过滤）。
+ * 「1 篇笔记 = 多个概念画布」的读取入口。
+ */
+export function useCanvases(noteId?: string): CanvasMeta[] {
+  const read = (): CanvasMeta[] =>
+    [...getCanvases(ydoc).values()]
+      .filter((c) => !noteId || c.noteId === noteId)
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+  const [canvases, setCanvases] = useState<CanvasMeta[]>(read);
+
+  useEffect(() => {
+    const update = () => setCanvases(read());
+    update();
+    const map = getCanvases(ydoc);
+    map.observe(update);
+    return () => map.unobserve(update);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteId]);
+
+  return canvases;
+}
+
+/** 订阅单个概念画布（当前画布 / 嵌入块都用它） */
+export function useCanvasMeta(id: string | null | undefined): CanvasMeta | undefined {
+  const [canvas, setCanvas] = useState<CanvasMeta | undefined>(() =>
+    id ? getCanvases(ydoc).get(id) : undefined,
+  );
+
+  useEffect(() => {
+    if (!id) {
+      setCanvas(undefined);
+      return;
+    }
+    const update = () => setCanvas(getCanvases(ydoc).get(id));
+    update();
+    const map = getCanvases(ydoc);
+    map.observe(update);
+    return () => map.unobserve(update);
+  }, [id]);
+
+  return canvas;
 }

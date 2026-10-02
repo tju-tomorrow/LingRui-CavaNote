@@ -3,10 +3,12 @@
  */
 import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { knowledgeCard } from "./knowledgeCard";
+import { canvasEmbed } from "./canvasEmbed";
 
 export const schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
     knowledgeCard: knowledgeCard(),
+    canvasEmbed: canvasEmbed(),
   },
 });

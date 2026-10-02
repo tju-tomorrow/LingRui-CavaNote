@@ -22,7 +22,7 @@ function targetElementId(call: CanvasToolCall): string | undefined {
     case "moveNode":
     case "deleteNode":
     case "setStyle":
-      return `el-${call.input.id}`;
+      return call.input.id;
     case "updateAnnotation":
     case "deleteAnnotation":
       return call.input.id;
@@ -44,8 +44,8 @@ export function GhostOverlay() {
       const elementId = targetElementId(patch.call);
       if (!elementId) return [];
 
-      // 元素 id 形如 el-<nodeId>，去掉前缀交给共享几何换算
-      const rect = nodeOverlayRect(elementId.replace(/^el-/, ""));
+      // 节点 / 注释的 cell id 就是 Knowledge id（ADR-0013）
+      const rect = nodeOverlayRect(elementId);
       if (!rect) return [];
 
       return [

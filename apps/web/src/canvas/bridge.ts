@@ -1,33 +1,32 @@
 /**
- * 画布 API 注册表 + 视口变化订阅
+ * 画布引擎注册表 + 视口变化订阅（ADR-0013）
  *
- * 聊天面板要截屏回灌上下文、ghost 预览要按视口定位，
- * 但都拿不到画布组件实例。这里放一个极薄的注册表
- * （同 editor/bridge.ts 的思路），避免把 Excalidraw 的
- * imperative API 通过 props 一层层传下去。
+ * 聊天面板要截屏回灌上下文、ghost 预览要按视口定位，但都拿不到画布实例。
+ * 这里放一个极薄的注册表（同 editor/bridge.ts 的思路），避免把 maxGraph 的
+ * imperative 引擎对象通过 props 一层层传下去。
  */
-import { useSyncExternalStore, type ComponentProps } from "react";
-import type { Excalidraw } from "@excalidraw/excalidraw";
+import { useSyncExternalStore } from "react";
+import type { GraphEngine } from "@lingrui/canvas";
 
-type ExcalidrawProps = ComponentProps<typeof Excalidraw>;
-export type CanvasApi = NonNullable<
-  Parameters<NonNullable<ExcalidrawProps["excalidrawAPI"]>>[0]
->;
+export type CanvasApi = GraphEngine;
 
-let api: CanvasApi | null = null;
+let engine: CanvasApi | null = null;
 let version = 0;
 const listeners = new Set<() => void>();
 
 export function registerCanvas(next: CanvasApi | null): void {
-  api = next;
+  engine = next;
+  if (import.meta.env.DEV) {
+    (window as unknown as Record<string, unknown>)["__canvas"] = next;
+  }
   bumpCanvasVersion();
 }
 
 export function getCanvas(): CanvasApi | null {
-  return api;
+  return engine;
 }
 
-/** 画布场景或视口变了（拖动、缩放、元素增删）——由 CanvasStage 的 onChange 调用 */
+/** 画布场景或视口变了（拖动、缩放、节点增删） */
 export function bumpCanvasVersion(): void {
   version += 1;
   for (const listener of listeners) listener();

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "outDir": "lib",
+    "strict": true,
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "target": "es2022",
+    "moduleResolution": "bundler",
+    "sourceMap": true,
+    "declaration": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "incremental": true,
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

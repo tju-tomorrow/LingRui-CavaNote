@@ -37,7 +37,9 @@ linux:
     - deb
   category: Office
 
-# 自动更新：静态托管（S3/MinIO）即可
+# 自动更新：静态托管（S3/MinIO）即可。
+# ⚠️ 占位：URL 未接真实对象存储，签名/公证也未配。本地 `npm run pack` **不会发布**
+#    （electron-builder 仅在 CI 打 tag 时才 publish）。上线前把 URL 换成真实地址并配证书。
 publish:
   provider: generic
   url: https://updates.lingrui.local/desktop

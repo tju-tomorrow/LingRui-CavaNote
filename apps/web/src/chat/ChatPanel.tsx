@@ -6,8 +6,8 @@
  * UI 走我们自己的设计语言。
  *
  * 模型来源（见 chat/remote.ts）：
- *   1. 优先 /api/chat（apps/collab 代理任何 OpenAI 兼容后端）
- *   2. 不可用时静默降级到本地 planner —— 两条路径共用同一套画布工具
+ *   /api/chat（apps/collab 代理任何 OpenAI 兼容后端）。
+ *   ⚠️ **无本地降级**：连不上 /api/chat 就如实报错（AI 是硬依赖）。
  */
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -17,9 +17,10 @@ import {
   useLocalRuntime,
   type ChatModelAdapter,
 } from "@assistant-ui/react";
-import { runAgent, runToolCall } from "./agent";
-import { chunks, sleep, textOf } from "./text";
+import { runToolCall } from "./agent";
+import { textOf } from "./text";
 import { remoteEnabled, streamRemote, type ChatMessage } from "./remote";
+import { remoteFailureNotice } from "./notice";
 import { freezeCanvasContext } from "../canvas/context";
 import { insertKnowledgeCard } from "../editor/bridge";
 import { snapshotToPrompt, applyPending } from "@lingrui/ai";
@@ -29,7 +30,7 @@ import { registerAsk } from "./ask";
 import { commitFaqAnswer } from "./faq";
 import { useReadOnlyShare } from "../shell/share";
 import { setFocus, useFocus } from "../state/focus";
-import { useRoundChanges } from "../state/round";
+import { useRoundChanges, startRoundChanges } from "../state/round";
 import {
   resolvePending,
   clearPending,
@@ -44,6 +45,10 @@ function createAdapter(): ChatModelAdapter {
 
   return {
     async *run({ messages, abortSignal }) {
+      // 一轮 = 一次用户提问。改动清单在本轮开始时清空，之后每条工具调用追加。
+      // 之前只有本地 planner 的 runAgent() 清，接真模型后清单会跨轮累积。
+      startRoundChanges();
+
       const question =
         [...messages].reverse().find((m) => m.role === "user")
           ? textOf([...messages].reverse().find((m) => m.role === "user")!)
@@ -54,68 +59,65 @@ function createAdapter(): ChatModelAdapter {
         .map((m) => ({ role: m.role as "user" | "assistant", content: textOf(m) }))
         .filter((m) => m.content.length > 0);
 
-      // ---- 路径 1：真实 LLM ----
-      if (remoteEnabled) {
-        // 冻结上下文：截图 + 可寻址数据，两者同版本（ADR-0011 决策 4）
-        const frozen =
-          remoteHealthy === false
-            ? null
-            : await freezeCanvasContext().catch(() => null);
-        const extras = frozen
-          ? { context: snapshotToPrompt(frozen.snapshot), image: frozen.screenshot }
-          : {};
-
-        let accumulated = "";
-        let started = false;
-        try {
-          for await (const event of streamRemote(payload, abortSignal, extras)) {
-            if (event.type === "text") {
-              started = true;
-              accumulated += event.delta;
-              yield { content: [{ type: "text" as const, text: accumulated }] };
-            } else if (event.type === "tool") {
-              started = true;
-              accumulated += runToolCall(event.name, event.arguments);
-              yield { content: [{ type: "text" as const, text: accumulated }] };
-            } else if (event.type === "error") {
-              throw new Error(event.message);
-            }
-          }
-          if (accumulated.trim()) {
-            remoteHealthy = true;
-            // 若这次提问来自详情卡的 FAQ，把答案落盘（PRD/知识模型.md §2.1）
-            commitFaqAnswer(question, accumulated);
-            return;
-          }
-        } catch (error) {
-          remoteHealthy = false;
-          if (started) {
-            // 已经输出过内容，不再拼接本地回复，避免两段话打架
-            yield {
-              content: [
-                { type: "text" as const, text: `${accumulated}\n\n（模型中断：${String(error)}）` },
-              ],
-            };
-            return;
-          }
-          // 还没输出任何东西 → 静默降级
-        }
+      // AI 是硬依赖：连不上就如实告知，**不再降级到本地讲解器**。
+      if (!remoteEnabled) {
+        yield {
+          content: [
+            {
+              type: "text" as const,
+              text: "⚠️ AI 已禁用（VITE_CHAT_API=off）。本应用需要连接 AI 服务才能工作。",
+            },
+          ],
+        };
+        return;
       }
 
-      // ---- 路径 2：本地 planner ----
-      // assistant-ui 的 local runtime 对每次 yield 是「覆盖」而非「追加」
-      // （内部是 [...initialContent, ...m.content]，initialContent 只在 run 开始时取一次）。
-      // 所以每块必须带上截至目前的全文字。
-      const reply = runAgent(question).reply;
+      // 冻结上下文：截图 + 可寻址数据，两者同版本（ADR-0011 决策 4）
+      const frozen =
+        remoteHealthy === false ? null : await freezeCanvasContext().catch(() => null);
+      const extras = frozen
+        ? { context: snapshotToPrompt(frozen.snapshot), image: frozen.screenshot }
+        : {};
+
       let accumulated = "";
-      for (const chunk of chunks(reply)) {
+      let started = false;
+      try {
+        for await (const event of streamRemote(payload, abortSignal, extras)) {
+          if (event.type === "text") {
+            started = true;
+            accumulated += event.delta;
+            yield { content: [{ type: "text" as const, text: accumulated }] };
+          } else if (event.type === "tool") {
+            started = true;
+            accumulated += runToolCall(event.name, event.arguments);
+            yield { content: [{ type: "text" as const, text: accumulated }] };
+          } else if (event.type === "error") {
+            throw new Error(event.message);
+          }
+        }
+        remoteHealthy = true;
+        if (accumulated.trim()) {
+          // 若这次提问来自详情卡的 FAQ，把答案落盘（PRD/知识模型.md §2.1）
+          commitFaqAnswer(question, accumulated);
+          return;
+        }
+        yield {
+          content: [
+            {
+              type: "text" as const,
+              text: "⚠️ AI 没有返回内容。请检查服务端 LLM 配置（OPENAI_API_KEY / 模型名）。",
+            },
+          ],
+        };
+      } catch (error) {
+        remoteHealthy = false;
+        // 用户主动取消（切页 / 新提问）：不提示
         if (abortSignal.aborted) return;
-        await sleep(14);
-        accumulated += chunk;
-        yield { content: [{ type: "text" as const, text: accumulated }] };
+        const text = started
+          ? `${accumulated}\n\n（模型中断：${String(error)}）`
+          : remoteFailureNotice(error);
+        yield { content: [{ type: "text" as const, text }] };
       }
-      // 本地讲解器路径也要落盘（否则不接 LLM 时 FAQ 答案永远存不下来）
-      commitFaqAnswer(question, accumulated);
     },
   };
 }
@@ -208,16 +210,31 @@ function AskBridge() {
   return null;
 }
 
+/** 空状态给的示例——降低"不知道怎么开口"的门槛 */
+const EXAMPLES = ["这个链路是怎么走的？", "把这张图整理成笔记", "补充当前节点的核心作用"];
+
 function Messages() {
   const messages = useAuiState((s) => s.thread.messages);
   const focus = useFocus();
+  const aui = useAui();
 
   if (messages.length === 0) {
     return (
       <div className="chat-empty">
-        你可以点击画布中的节点，
-        <br />
-        我会为你生成详细的解释笔记。
+        <div className="chat-empty-title">✨ 直接问我</div>
+        <div className="chat-empty-sub">解释节点 · 改画布 · 整理笔记</div>
+        <div className="chat-examples">
+          {EXAMPLES.map((ex) => (
+            <button
+              key={ex}
+              type="button"
+              className="chat-example"
+              onClick={() => aui.thread.append(ex)}
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
       </div>
     );
   }

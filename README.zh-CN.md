@@ -12,7 +12,7 @@ LingRui CavaNote 把"讲一遍"变成"演一遍"：在对话区让 AI 帮你把�
 
 ## ✨ 特性
 
-- **AI × 人 共编画布** — 用自然语言添加节点、连线、移动、删除；本地规则讲解器兜底，**无需任何 API Key 即可开箱即用**
+- **AI × 人 共编画布** — 用自然语言添加节点、连线、移动、删除；**必须连接 LLM**（OpenAI 兼容），无本地降级：连不上会直接报错。
 - **文档 × 画布实时联动** — 一份知识，两种视图，双向同步
 - **会自己讲解** — 讲解过程沿时间轴自动演出，可暂停 / 快进 / 倍速 / 重播
 - **点击节点追问** — 节点详情卡内置 FAQ，随手继续深挖
@@ -31,7 +31,7 @@ bun install
 bun run dev
 ```
 
-**零配置即可体验核心功能**：没有协同服务、没有 LLM 时，数据存本地 IndexedDB，由内置的本地讲解器负责讲解。
+数据存本地 IndexedDB。**AI 功能必须要连接 LLM**（见下节配置），没有本地讲解器兜底。
 
 ### 需要多人协同 + 真实 LLM 时
 
@@ -74,7 +74,7 @@ bash scripts/dev-collab-oc.sh                   # key 从 ~/.local/share/opencod
 bash scripts/dev-collab-oc.sh deepseek-v4-pro   # 也可指定模型
 ```
 
-不填时 `/api/chat` 返回 503，前端自动降级到本地讲解器，功能依然可用。
+不填时 `/api/chat` 返回 503，前端会直接提示「服务端没配置 LLM」，**不再降级**。
 
 > 国内网络拉不到 Docker Hub 时，用镜像源拉完再打回原名，例如：
 > `docker pull docker.m.daocloud.io/valkey/valkey:8-alpine && docker tag … valkey/valkey:8-alpine`

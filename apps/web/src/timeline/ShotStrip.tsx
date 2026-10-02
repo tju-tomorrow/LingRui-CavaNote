@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { sampleAt, shotAt, type SceneScript, type Shot } from "@lingrui/anim";
 import { formatTime, player, usePlayer } from "../state/player";
 import { useKnowledgeChapters } from "../collab/useKnowledge";
+import { useActiveCanvas } from "../state/canvas";
 import { captureThumb, clearThumbs, subscribeThumbs, thumbOf } from "./thumbs";
 
 const W = 88;
@@ -49,8 +50,8 @@ function MiniShot({ script, t }: { script: SceneScript; t: number }) {
             width={12}
             height={7}
             rx={2}
-            fill={n.appear >= 1 ? "#eef0ff" : "#f5f5f5"}
-            stroke="#5b5bd6"
+            fill={n.appear >= 1 ? "#f4f4f5" : "#f5f5f5"}
+            stroke="#18181b"
             strokeWidth={0.8}
           />
         );
@@ -63,16 +64,19 @@ export function ShotStrip() {
   const { script, chapters: memory, t } = usePlayer();
   // 优先 Y.Doc 里的分镜（可被人工编辑、可持久化）；还没落过盘时退回内存推导。
   // Chapter.startT 是可选的，这里归一成 Shot（startT 必填）给 shotAt / seek 用。
-  const persisted = useKnowledgeChapters();
-  const chapters: Shot[] = useMemo(
-    () =>
-      (persisted.length > 0 ? persisted : memory).map((c) => ({
-        id: c.id,
-        title: c.title,
-        startT: c.startT ?? 0,
-      })),
-    [persisted, memory],
-  );
+  const persisted = useKnowledgeChapters(useActiveCanvas());
+  const chapters: Shot[] = useMemo(() => {
+    const src = persisted.length > 0 ? persisted : memory;
+    // 去重：多轮 AI 推导可能落下重复 id → 渲染重复 key → React 报错刷屏
+    const seen = new Set<string>();
+    const out: Shot[] = [];
+    for (const c of src) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push({ id: c.id, title: c.title, startT: c.startT ?? 0 });
+    }
+    return out;
+  }, [persisted, memory]);
 
   const current = script ? shotAt(chapters, t) : undefined;
 
@@ -95,7 +99,7 @@ export function ShotStrip() {
         const thumb = thumbOf(c.id);
         return (
           <button
-            key={c.id}
+            key={`${c.id}-${i}`}
             type="button"
             className={`tl-shot${current?.id === c.id ? " active" : ""}`}
             onClick={() => player.seek(c.startT)}

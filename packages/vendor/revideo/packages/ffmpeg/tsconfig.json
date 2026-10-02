@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "outDir": "./dist",
+    "inlineSourceMap": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "bundler",
+    "strict": true,
+    "module": "CommonJS",
+    "target": "es2020",
+    "declaration": true,
+    "declarationMap": true,
+    "incremental": true,
+    "rootDir": "src"
+  },
+  "include": ["."]
+}

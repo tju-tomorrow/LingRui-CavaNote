@@ -1,0 +1,73 @@
+{
+  "name": "revideo",
+  "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "core:dev": "npm run dev -w packages/core",
+    "core:build": "npm run build -w packages/core",
+    "core:bundle": "npm run bundle -w packages/core",
+    "core:test": "npm run test -w packages/core",
+    "2d:dev": "npm run dev -w packages/2d",
+    "2d:build": "npm run build -w packages/2d",
+    "2d:bundle": "npm run bundle -w packages/2d",
+    "2d:test": "npm run test -w packages/2d",
+    "ui:dev": "npm run dev -w packages/ui",
+    "ui:build": "npm run build -w packages/ui",
+    "ui:showcase": "npm run showcase -w packages/ui",
+    "ui:type": "npm run type -w packages/ui",
+    "template:dev": "npm run dev -w packages/template",
+    "template:build": "npm run build -w packages/template",
+    "template:render": "npm run render -w packages/template",
+    "examples:dev": "npm run dev -w packages/examples",
+    "examples:build": "npm run build -w packages/examples",
+    "renderer:build": "npm run build -w packages/renderer",
+    "player:dev": "npm run dev -w packages/player",
+    "player:build": "npm run build -w packages/player",
+    "vite-plugin:dev": "npm run dev -w packages/vite-plugin",
+    "vite-plugin:build": "npm run build -w packages/vite-plugin",
+    "docs:dev": "npm run dev -w packages/docs",
+    "docs:build": "npm run build -w packages/docs",
+    "docs:start": "npm run start -w packages/docs",
+    "e2e:test": "npm run test -w packages/e2e",
+    "eslint": "eslint \"**/*.ts?(x)\"",
+    "eslint:fix": "eslint --fix \"**/*.ts?(x)\"",
+    "prettier": "prettier --check .",
+    "prettier:fix": "prettier --write ."
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.0",
+    "@commitlint/config-conventional": "^21.2.0",
+    "@eslint/js": "^10.0.1",
+    "@typescript-eslint/eslint-plugin": "^8.62.1",
+    "@typescript-eslint/parser": "^8.62.1",
+    "eslint": "^10.6.0",
+    "eslint-plugin-tsdoc": "^0.5.2",
+    "globals": "^17.7.0",
+    "husky": "^9.1.7",
+    "lerna": "^9.0.7",
+    "lint-staged": "^17.0.8",
+    "prettier": "3.3.3",
+    "prettier-plugin-organize-imports": "4.1.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1",
+    "vite": "^8.1.2",
+    "vitest": "^4.1.9"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": "eslint --fix",
+    "*.{js,jsx,ts,tsx,md,scss}": "prettier --write"
+  },
+  "overrides": {
+    "preact": "10.29.3",
+    "@preact/signals": "2.9.2",
+    "zod": "4.3.6",
+    "chromium-bidi": {
+      "zod": "^3.24.1"
+    }
+  }
+}

@@ -258,6 +258,106 @@ body,
   color: var(--muted);
 }
 
+/* 概念画布嵌入块：笔记里的「一张概念图」 */
+.canvas-embed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid #4f7cff;
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.canvas-embed:hover {
+  background: #f4f4f5;
+}
+
+.canvas-embed.is-active {
+  border-color: #4f7cff;
+  background: #eef2ff;
+}
+
+.canvas-embed .ce-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4f7cff;
+}
+
+.canvas-embed .ce-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.canvas-embed .ce-title {
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.canvas-embed .ce-rename {
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.canvas-embed .ce-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.canvas-embed .ce-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.canvas-embed:hover .ce-actions {
+  opacity: 1;
+}
+
+.canvas-embed .ce-actions button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.canvas-embed .ce-actions button:hover {
+  background: var(--border);
+  color: var(--fg);
+}
+
+.canvas-embed .ce-open {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.canvas-embed-orphan {
+  border-left-color: var(--muted);
+  cursor: default;
+  opacity: 0.7;
+}
+
 .knowledge-card-flash {
   animation: kc-flash 1.2s ease;
 }
@@ -317,9 +417,235 @@ body,
   background: radial-gradient(circle at 1px 1px, #e8e8e8 1px, transparent 0) 0 0 / 24px 24px;
 }
 
-.excalidraw-host {
+.mxgraph-host {
   position: absolute;
   inset: 0;
+  /* 交给 maxGraph 的 SVG 铺满；文字用系统字体 */
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  touch-action: none;
+}
+
+.mxgraph-host svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 注释工具栏 / 绘制层（ADR-0013 恢复 Annotation 链路） */
+.anno-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 6;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, transparent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(6px);
+}
+
+.anno-tool {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg, #27272a);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.anno-tool:hover {
+  background: color-mix(in srgb, var(--fg, #27272a) 8%, transparent);
+}
+
+.anno-tool.is-active {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.anno-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 透明的绘制捕获层：激活工具时盖住画布，不干扰 maxGraph 的选择态 */
+.anno-capture {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* 抓手模式：👋 待命 / 拖动中 */
+.anno-capture.is-pan {
+  cursor: grab;
+}
+
+.anno-capture.is-panning {
+  cursor: grabbing;
+}
+
+.anno-draft {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+}
+
+.anno-composer {
+  position: absolute;
+  z-index: 8;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #b45309;
+  border-radius: 8px;
+  background: #fff7e0;
+  color: #3f2d0b;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+
+.anno-clear {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 6;
+  padding: 4px 9px;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, transparent);
+  color: var(--muted, #71717a);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* 布局动作（对齐 / 分布 / 自动布局） */
+.layout-bar {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 6;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, transparent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(6px);
+}
+
+.layout-bar button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg, #27272a);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.layout-bar button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg, #27272a) 8%, transparent);
+}
+
+.layout-bar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 节点面板（新建 / 改形状） */
+.node-palette {
+  position: absolute;
+  top: 46px;
+  left: 10px;
+  z-index: 7;
+  width: 240px;
+  padding: 8px;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface, #fff) 96%, transparent);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+}
+
+.np-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--fg, #27272a);
+}
+
+.np-close {
+  border: 0;
+  background: transparent;
+  color: var(--muted, #71717a);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.np-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.np-kind {
+  padding: 3px 7px;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg, #27272a);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.np-kind.is-active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.np-shape-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted, #71717a);
+}
+
+.np-shape {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  color: var(--fg, #27272a);
+  font-size: 12px;
+}
+
+.np-hint {
+  margin-top: 6px;
+  color: var(--muted, #71717a);
+  font-size: 11px;
 }
 
 .canvas-placeholder {
@@ -715,6 +1041,53 @@ html[data-glass="desktop"] .bn-container {
   margin: 0 0 10px;
 }
 
+.nd-body-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--accent, #18181b);
+  border: 1px solid var(--border, #d4d4d8);
+  background: #fff;
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.nd-body-btn:hover {
+  border-color: var(--accent, #18181b);
+}
+
+/* 资产外观色卡 */
+.nd-swatches {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.nd-swatch {
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--border, #d4d4d8);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.nd-swatch-default {
+  width: auto;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: #fff;
+}
+
+.nd-swatch:hover {
+  border-color: var(--accent, #18181b);
+}
+
 .nd-section {
   margin-top: 10px;
 }
@@ -1054,10 +1427,101 @@ html[data-glass="desktop"] .bn-container {
   color: var(--muted);
 }
 
+.view-row-undoc {
+  color: #b45309;
+  font-weight: 600;
+}
+
 .view-empty {
   font-size: 12px;
   color: var(--muted);
   padding: 10px 2px;
+}
+
+/* 资产浏览器（ADR-0014）：节点资产 / 画布资产两 tab */
+.asset-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.asset-tab {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.asset-tab:hover {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.asset-tab.active {
+  color: var(--accent, #18181b);
+  background: #f4f4f5;
+}
+
+.view-sub-tip {
+  opacity: 0.85;
+}
+
+.asset-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.asset-group-title {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.view-dot-canvas {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(45deg, #d4d4d8 0 2px, #fafafa 2px 4px);
+  border-color: #a1a1aa;
+}
+
+/* 资产行：行主按钮 + 行尾动作（回收/恢复） */
+.asset-li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.asset-li .view-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.asset-row-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.45;
+}
+
+.asset-row-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .view-group-label {
@@ -1280,6 +1744,35 @@ html[data-glass="desktop"] .bn-container {
 
 .pet-hit.is-bounce {
   animation: pet-bounce 420ms cubic-bezier(0.28, 1.6, 0.5, 1);
+}
+
+/* ASCII 形态：把 pet.avatar.art 逐行渲染 */
+.pet-ascii {
+  margin: 0;
+  padding: 4px 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.1;
+  white-space: pre;
+  color: #1e1e1e;
+  background: #fff;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 10px;
+}
+
+/* VRM 形态占位（缺 .vrm 资产）——至少让用户看到宠物在，而不是凭空消失 */
+.pet-vrm-stub {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #71717a);
+  background: color-mix(in srgb, var(--surface, #fff) 88%, transparent);
+  border: 1px dashed var(--border, #d4d4d8);
+  border-radius: 12px;
 }
 
 @keyframes pet-bounce {
@@ -1552,6 +2045,61 @@ html[data-glass="desktop"] .bn-container {
   outline: 2px solid rgba(24, 24, 27, 0.9);
   transition: left 260ms cubic-bezier(0.22, 1, 0.36, 1), top 260ms cubic-bezier(0.22, 1, 0.36, 1),
     width 260ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 数据流粒子：沿节点连线跑的「数据包」（演出层） */
+.flow-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* 手绘强调层（rough.js）：讲解时当场圈重点 */
+.emphasis-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.flow-trail {
+  stroke: #4f7cff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.flow-halo {
+  fill: #4f7cff;
+}
+
+.flow-dot {
+  fill: #ffffff;
+  stroke: #4f7cff;
+  stroke-width: 2;
+}
+
+/* 手绘强调：Agent 圈重点（rough.js 生成的路径） */
+.emphasis-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.emphasis-label {
+  fill: #e8590c;
+  font-size: 12px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 3px;
 }
 
 /* 旁白字幕条 */

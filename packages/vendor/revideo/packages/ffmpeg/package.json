@@ -1,0 +1,35 @@
+{
+  "name": "@revideo/ffmpeg",
+  "version": "0.11.0",
+  "description": "Ffmpeg utilities for revideo",
+  "main": "dist/index.js",
+  "author": "revideo",
+  "homepage": "https://re.video/",
+  "bugs": "https://github.com/midrender/revideo/issues",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midrender/revideo.git",
+    "directory": "packages/ffmpeg"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "files": [
+    "dist",
+    "types"
+  ],
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@ffprobe-installer/ffprobe": "^2.0.0",
+    "@revideo/core": "0.11.0",
+    "@revideo/telemetry": "0.11.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@types/ffprobe-static": "^2.0.3",
+    "@types/fluent-ffmpeg": "^2.1.21",
+    "@types/uuid": "^10.0.0"
+  }
+}

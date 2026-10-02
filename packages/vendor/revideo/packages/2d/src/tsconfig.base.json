@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "..",
+    "strict": true,
+    "noImplicitOverride": true,
+    "module": "esnext",
+    "target": "es2020",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "inlineSourceMap": true,
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "composite": true,
+    "incremental": true
+  }
+}

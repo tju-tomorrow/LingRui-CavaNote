@@ -52,13 +52,11 @@ export function SpotlightOverlay({ enabled = true }: { enabled?: boolean }) {
    */
   useEffect(() => {
     if (!active || !focus) return;
-    const api = getCanvas();
-    if (!api) return;
+    const engine = getCanvas();
+    if (!engine) return;
 
     const raf = requestAnimationFrame(() => {
-      const element = api.getSceneElements().find((el) => el.id === `el-${focus}`);
-      if (!element) return;
-      api.scrollToContent([element], { fitToContent: false, animate: true });
+      engine.centerOn(focus);
     });
     return () => cancelAnimationFrame(raf);
   }, [active, focus]);

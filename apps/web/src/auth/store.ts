@@ -5,10 +5,10 @@
  * 因为服务端签发与校验用的是同一套 secret/issuer（见 apps/collab/src/auth.ts）。
  *
  * 不登录也能用（本地优先）：此时回落到 VITE_COLLAB_TOKEN / 桌面端 bridge.token，
- * 或者干脆不连远端，只走本地 IndexedDB + 本地讲解器。
+ * 或者干脆不连远端，只走本地 IndexedDB（此时 AI 功能不可用）。
  */
 import { useSyncExternalStore } from "react";
-import { CHAT_API } from "../chat/remote";
+import { CHAT_API } from "../chat/config";
 
 export interface AuthUser {
   id: string;

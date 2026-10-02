@@ -97,6 +97,8 @@ export interface KnowledgeNode {
   tags?: string[];
   /** 归属章节 / 分镜 */
   chapterId?: ChapterId;
+  /** 进回收站的时间戳（毫秒）；有值 = 资产已删待恢复，不参与画布/加载/搜索 */
+  trashedAt?: number;
 
   /** 自由元数据（icon / tech / links…） */
   meta?: Record<string, unknown>;
@@ -124,6 +126,19 @@ export const ROOT_PROGRESS = "progress";
 /** 演出动作流（SceneScript 的输入）——持久化后刷新不会丢演出 */
 export const ROOT_TIMELINE = "timeline";
 
+/**
+ * 按画布分桶的演出动作流：Y.Map<canvasId, Y.Array<Action>>。
+ * 画布是完整资产：切画布就换一套演出，不串场。
+ * （保留 ROOT_TIMELINE 作旧全局数据迁移用。）
+ */
+export const ROOT_TIMELINES = "timelines";
+
+/**
+ * 概念画布（PRD：1 篇笔记 = 多个概念画布；1 个画布 = 1 个概念）。
+ * 知识仍然全局（ROOT_NODES 一份），画布只是「精选视图 + 自己的布局」。
+ */
+export const ROOT_CANVASES = "canvases";
+
 export type NoteId = string;
 
 /**
@@ -146,6 +161,8 @@ export interface NoteMeta {
   isFolder?: boolean;
   /** 横切标签（PRD/主界面.md §5.5），笔记与节点都能打 */
   tags?: string[];
+  /** 进回收站的时间戳（毫秒）；有值 = 已删待恢复，不参与目录树/搜索/视图 */
+  trashedAt?: number;
 }
 
 /** 画布上的位置。属于“表现”，但存在同一个 Y.Doc 里以便持久化与协同。 */

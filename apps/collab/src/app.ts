@@ -18,7 +18,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { canAccess, verifyToken } from "./auth";
 import { handleAuth, isAuthRequest } from "./auth-routes";
 import { handleChat, isChatRequest } from "./chat";
+import { handleSystemOne, isSystemOneRequest, systemOneConfigured } from "./systemone";
 import { closePools } from "./db";
+import { loadLlmEnv } from "./llm-env";
 import { createPersistence, type Persistence } from "./persistence";
 import { createUserStore, migrateUsers, type UserStore } from "./users";
 
@@ -62,6 +64,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const warn = (...args: unknown[]) => {
     if (!quiet) console.warn(...args);
   };
+
+  // 零配置 LLM：没有 OPENAI_API_KEY 时从 ~/.config / opencode auth 探测（桌面端已提前设过则跳过）
+  const llmSource = loadLlmEnv();
+  if (llmSource && llmSource !== "env") log(`[collab] LLM 配置：${llmSource}`);
 
   // ---- Postgres：失败不致命 ----
   let persistence: Persistence | null = null;
@@ -147,6 +153,17 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       return;
     }
 
+    // System One（Jev）决策模型代理：只回带概率的标签，和 /api/chat 互不干扰
+    if (isSystemOneRequest(req)) {
+      if (localToken && req.headers["x-lingrui-token"] !== localToken) {
+        res.writeHead(403, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "bad local token" }));
+        return;
+      }
+      void handleSystemOne(req, res, { requireAuth: Boolean(users) && !localToken });
+      return;
+    }
+
     if (!isChatRequest(req)) {
       hocuspocusHandler?.(req, res);
       return;
@@ -172,7 +189,12 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   log(
     process.env.OPENAI_API_KEY
       ? `[collab] /api/chat 已就绪（${process.env.LLM_MODEL ?? "gpt-4o-mini"} @ ${process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1"}）`
-      : "[collab] /api/chat 未配置 LLM，客户端会自动降级到本地 planner",
+      : "[collab] /api/chat 未配置 LLM，客户端会提示需要 AI 服务",
+  );
+  log(
+    systemOneConfigured()
+      ? `[collab] /api/systemone 已就绪（${process.env.TYPESAFE_MODEL ?? "jev-latest"}）`
+      : "[collab] /api/systemone 未配置 key，检索将不做 Jev 重排",
   );
 
   return {

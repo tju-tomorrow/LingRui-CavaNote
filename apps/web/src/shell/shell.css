@@ -79,7 +79,7 @@
   border-radius: 10px;
   cursor: pointer;
 }
-.rail .rail-item.active { background: #eef0ff; color: var(--accent); }
+.rail .rail-item.active { background: #f4f4f5; color: var(--accent); }
 .rail .rail-icon { font-size: 16px; line-height: 1; }
 .rail .rail-label { font-size: 10px; }
 
@@ -105,12 +105,12 @@
   font-size: 13px; padding: 4px 6px; border-radius: 6px; cursor: pointer;
 }
 .tree .tree-node:hover { background: #f1f1f6; }
-.tree .tree-node.active { background: #eef0ff; color: var(--accent); }
+.tree .tree-node.active { background: #f4f4f5; color: var(--accent); }
 .tree .tree-dot {
   width: 7px; height: 7px; border-radius: 2px; flex: none;
   background: var(--muted);
 }
-.tree .tree-dot.kind-gateway { background: #5b5bd6; }
+.tree .tree-dot.kind-gateway { background: #18181b; }
 .tree .tree-dot.kind-service { background: #0f7b6c; }
 .tree .tree-dot.kind-cache { background: #c2410c; }
 .tree .tree-dot.kind-database { background: #1d4ed8; }
@@ -164,9 +164,9 @@
   border: none; background: transparent; text-align: left;
   padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--text);
 }
-.palette .palette-item:hover { background: #eef0ff; }
+.palette .palette-item:hover { background: #f4f4f5; }
 .palette .palette-kind {
-  font-size: 10px; color: var(--accent); background: #eef0ff;
+  font-size: 10px; color: var(--accent); background: #f4f4f5;
   padding: 1px 6px; border-radius: 999px; flex: none;
 }
 .palette .palette-title { font-size: 13px; font-weight: 600; flex: none; }

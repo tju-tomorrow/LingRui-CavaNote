@@ -12,7 +12,7 @@
  *   {"type":"done"}                               结束
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { CANVAS_TOOLS, PET_TOOLS, SYSTEM_PROMPT } from "@lingrui/ai";
+import { CANVAS_TOOLS, DIRECT_TOOL, NOTE_TOOLS, PET_TOOLS, SYSTEM_PROMPT } from "@lingrui/ai";
 import { verifyToken } from "./auth";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
@@ -88,7 +88,7 @@ function cors(res: ServerResponse): void {
  * 实测会发 `type` 而不是 `kind`、用 `x`/`y` 而不是 `at`，生成的节点全是坏的。
  */
 function openAiTools() {
-  return Object.entries({ ...CANVAS_TOOLS, ...PET_TOOLS }).map(([name, spec]) => ({
+  return Object.entries({ ...CANVAS_TOOLS, ...PET_TOOLS, ...NOTE_TOOLS, direct: DIRECT_TOOL }).map(([name, spec]) => ({
     type: "function" as const,
     function: {
       name,
@@ -136,7 +136,7 @@ export async function handleChat(
       res.end(
         JSON.stringify({
           error: "需要登录",
-          hint: "未登录时前端会自动降级到本地讲解器",
+          hint: "本应用需要 AI 服务；未登录时 AI 不可用，请先登录",
         }),
       );
       return;

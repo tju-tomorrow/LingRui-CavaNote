@@ -7,11 +7,11 @@
  *
  * 工具定义同时服务于：
  *   - 前端 AI SDK 的 tool calling
- *   - 本地 planner（无 LLM 时的降级路径）
  *   - 未来的 canvas MCP server
  *
  * 实际执行在 executor.ts —— 那里是唯一能改 Y.Doc 的地方。
  */
+import { EMPHASIS_STYLES } from "@lingrui/anim";
 import type { NodeKind } from "@lingrui/knowledge";
 import type { CanvasToolCall } from "./executor";
 
@@ -54,6 +54,19 @@ const AT_SCHEMA = {
 
 /** 工具描述表：给 LLM 看的能力清单（ADR-0011 §5）。params 直接作为 OpenAI function parameters。 */
 export const CANVAS_TOOLS = {
+  loadAsset: {
+    description: "按需加载知识库资产：检索已定义的名词（标题/摘要/标签/类型），命中就用它的 id 复用",
+    when: "讲到一个名词、要建节点之前，先查字典有没有已经定义好的资产",
+    params: {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string", description: "要谈的名词，如「网关」「Redis」「熔断」" },
+        kinds: { type: "array", items: { type: "string", enum: NODE_KINDS }, description: "只在这些类型里找（可选）" },
+        limit: { type: "number", description: "最多返回几个候选（默认 6）" },
+      },
+    },
+  },
   spawnNode: {
     description: "在画布上生成一个基建实体节点，并写入 Knowledge 层",
     when: "当讲解需要引入新实体时",
@@ -68,6 +81,11 @@ export const CANVAS_TOOLS = {
         kind: { type: "string", enum: NODE_KINDS, description: "基建类型" },
         title: { type: "string", description: "节点标题（中文，简洁，≤12 字）" },
         summary: { type: "string", description: "一句话说明这个节点干什么" },
+        shape: {
+          type: "string",
+          description:
+            "形状 key（可选），来自 draw.io 全套形状库，格式 `<库>.<形状>`：如 networks.firewall、networks.load-balancer、networks.router、rack.general.1u-rack-server、kubernetes.pod",
+        },
         at: AT_SCHEMA,
       },
     },
@@ -83,6 +101,7 @@ export const CANVAS_TOOLS = {
         title: { type: "string" },
         summary: { type: "string" },
         kind: { type: "string", enum: NODE_KINDS },
+        shape: { type: "string", description: "换成 draw.io 形状库里的形状（格式 `<库>.<形状>`，如 networks.firewall）" },
       },
     },
   },
@@ -168,14 +187,35 @@ export const CANVAS_TOOLS = {
       properties: { nodeId: { type: "string", description: "目标节点 id" } },
     },
   },
+  emphasize: {
+    description: "给节点画一个手绘强调（圈 / 框 / 下划线 / 叉 / 高亮），让它“当场圈重点”",
+    when: "当要突出某个节点时（比 focus 更醒目，适合视频演出）",
+    params: {
+      type: "object",
+      required: ["nodeId", "style"],
+      properties: {
+        nodeId: { type: "string", description: "目标节点 id" },
+        style: {
+          type: "string",
+          enum: ["circle", "box", "underline", "cross", "highlight"],
+          description: "circle=圈重点，box=框起来，underline=下划线，cross=打叉（危险/不推荐），highlight=荧光笔",
+        },
+        text: { type: "string", description: "可选的附注文字" },
+      },
+    },
+  },
   narrate: {
     description: "让吉祥物在某个时间点说一句话",
-    when: "当需要旁白时",
+    when: "当需要旁白时（先图后文：节点/关系/流动都就绪后再 narrate）",
     params: {
       type: "object",
       required: ["text"],
       properties: {
-        text: { type: "string", description: "旁白文本，口语短句，≤30 字" },
+        text: {
+          type: "string",
+          description:
+            "旁白文本。ASD-STE100 风格：一句一个意思、主动语态、常见词；术语首次出现先定义。",
+        },
         nodeId: { type: "string" },
       },
     },
@@ -231,6 +271,104 @@ export const CANVAS_TOOLS = {
 export type CanvasToolName = keyof typeof CANVAS_TOOLS;
 
 export const TOOL_NAMES = Object.keys(CANVAS_TOOLS) as CanvasToolName[];
+
+/**
+ * LingRui Script —— Agent 的「导演语言」（JSON + 工具意图 + 自然语言三合一）。
+ *
+ * 与其零散地逐个调工具，Agent 可以一次交出一段**有序动作流**：
+ * 每一拍 = 一个工具意图（`do` + 该工具的参数）+ 一句旁白（`say`）。
+ * 引擎按数组顺序执行、自动排时间、自动旁白。
+ *
+ * 为什么需要它：
+ *   - 顺序：节奏是讲解的一部分，不能交给并行/乱序的工具调用。
+ *   - 语言：`say` 与动作同处一拍，旁白不再和动作脱节。
+ *   - 一次成形：整段讲解 = 一次工具调用，模型不必反复往返。
+ */
+export const DIRECT_TOOL = {
+  description:
+    "用 LingRui Script 一次性导演整段讲解：按顺序给出动作节拍（beat），每拍 = 一个工具意图（do）+ 该工具的参数 + 一句旁白（say）。引擎按顺序执行并自动排时间。讲清一个主题时优先用它，而不是零散地逐个调工具。",
+  when: "当要完整讲清一个主题，或需要明确的先后节奏时",
+  params: {
+    type: "object",
+    required: ["beats"],
+    properties: {
+      title: { type: "string", description: "这段讲解的标题（简短）" },
+      beats: {
+        type: "array",
+        minItems: 1,
+        description: "有序的动作节拍；引擎按数组顺序执行",
+        items: {
+          type: "object",
+          required: ["do"],
+          properties: {
+            do: {
+              type: "string",
+              enum: [
+                "spawnNode",
+                "updateNode",
+                "moveNode",
+                "deleteNode",
+                "connect",
+                "disconnect",
+                "setStyle",
+                "flow",
+                "focus",
+                "emphasize",
+                "annotate",
+                "updateAnnotation",
+                "deleteAnnotation",
+                "writeNote",
+                "newCanvas",
+              ],
+              description: "这一拍用哪个工具",
+            },
+            say: {
+              type: "string",
+              description:
+                "这一拍的旁白（ASD-STE100 风格：一句一个意思、主动语态、常见词）；省略则无旁白",
+            },
+          },
+          // 其余字段 = 该 do 对应工具的入参，平铺在同一拍上
+          additionalProperties: true,
+        },
+      },
+    },
+  },
+} as const;
+
+/**
+ * 笔记 / 画布结构工具 —— 在 web 层执行（不进 executor，因为它们要碰编辑器）。
+ *
+ * `writeNote`：扩展**笔记**；`newCanvas`：开一张新的**概念画布**并嵌入笔记。
+ * 与画布工具分开，是为了让 Agent 能区分「改图」和「写笔记」两件事。
+ */
+export const NOTE_TOOLS = {
+  writeNote: {
+    description: "把内容写进当前笔记（扩展笔记，而不是改画布）",
+    when: "当用户要「整理成笔记 / 补一段说明 / 把结论写下来」时",
+    params: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "要写入笔记的一段正文（Markdown 风格纯文本）" },
+        nodeId: {
+          type: "string",
+          description: "省略则写 text；给了则把该知识节点作为卡片写进笔记",
+        },
+      },
+    },
+  },
+  newCanvas: {
+    description: "新建一张概念画布并嵌入当前笔记（1 篇笔记可以有多个概念画布）",
+    when: "当要为一个新概念单独开一张图时",
+    params: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "画布标题（这个概念的名字）" },
+        noteId: { type: "string", description: "省略则挂到当前打开的笔记" },
+      },
+    },
+  },
+} as const;
 
 export const WRITE_TOOLS: CanvasToolName[] = [
   "spawnNode",
@@ -348,6 +486,29 @@ function normalizeInput(name: CanvasToolName, raw: Record<string, unknown>): unk
     delete input.id;
   }
 
+  if (name === "emphasize") {
+    if (input.nodeId === undefined && typeof input.id === "string") input.nodeId = input.id;
+    if (input.style === undefined && input.type !== undefined) input.style = input.type;
+    if (typeof input.style === "string") {
+      const s = input.style.trim().toLowerCase();
+      const aliases: Record<string, string> = {
+        ellipse: "circle",
+        round: "circle",
+        rect: "box",
+        rectangle: "box",
+        square: "box",
+        line: "underline",
+        under: "underline",
+        x: "cross",
+        strike: "cross",
+        hl: "highlight",
+        marker: "highlight",
+      };
+      const style = aliases[s] ?? s;
+      input.style = EMPHASIS_STYLES.includes(style as never) ? style : "circle";
+    }
+  }
+
   return input;
 }
 
@@ -368,13 +529,27 @@ export function toCanvasToolCall(
 
 export const SYSTEM_PROMPT = `你是 LingRui CavaNote 的基建讲解 Agent。
 
+你的产物分两层：
+- **图（主）**：节点 + 关系 + 数据流。让人一眼看到「谁连谁、数据怎么走、哪里会出问题」。
+- **文（辅）**：旁白字幕。只补图里看不出的那一句，不重复图已经说清的。
+
 规则：
-1. 你的输出不是长文，而是**动作流**。把知识拆成「节点出现 → 建立关系 → 数据流动 → 吉祥物讲解」。
-2. 每个节点必须先 spawnNode 再被引用；坐标由你规划，尽量分层（用户 → 网关 → 服务 → 存储）。
-3. 一次讲解不超过 8 个节点，否则观众会迷失。
-4. 讲解文本用口语短句，配合时间轴，一句不超过 30 字。
-5. 不要编造知识；不确定的内容标注「不确定」并给出追问建议。
-6. 用户想养 / 换一只宠物老师时，用 createPet / setPetAppearance 等**宠物工具**，不要建画布节点。`;
+1. **先图后文**。每个概念先 spawnNode、再 connect，最后才 narrate。能画成图就不要写成段落。
+2. 结构优先：调用链用 connect；数据流向用 flow；**当场圈重点用 emphasize（手绘圈/框/下划线/高亮，临时）**；
+   持久改样式才用 setStyle；聚焦镜头用 focus。
+3. 每个节点必须先 spawnNode 再被引用；坐标由你规划，尽量分层（用户 → 网关 → 服务 → 存储）。
+4. 节点数量**以讲清楚为准**：该拆就拆，不要为了“简短”省略关键环节；
+   图大了就用分镜（章节）组织节奏，而不是砍内容。
+5. 旁白遵守 **ASD-STE100**（约 80% 严格度）：一句话一个意思；主动语态、现在时；用常见词；
+   不用比喻/成语/模糊词；术语首次出现用一句话定义。长就多讲几句，但每句都要能单独读懂。
+6. 旁白像 3Blue1Brown 的解说：短、准、有节奏；配合 focus 聚焦当前节点，让镜头跟着讲解走，而不是念稿。
+7. 不要编造知识；不确定的内容标注「不确定」并给出追问建议。
+8. 用户想养 / 换一只宠物老师时，用 createPet / setPetAppearance 等**宠物工具**，不要建画布节点。
+10. **先查字典，再命名（知识资产，ADR-0014）**：每次 spawnNode 之前先 loadAsset 查知识库；
+    命中已有资产的，**用它的 id 和解释直接复用**（解释/形态/关系全继承，不重复造名词）；
+    只有确实没有时才新建。新建时给它完整解释（summary + 2~4 条 roles），让它在知识库里可复用。
+9. 讲清一个主题时，**优先用 direct 一次给出整段有序节拍**（每拍 = 工具意图 do + 参数 + 一句 say），
+   而不是零散地逐个调工具。say 写旁白，动作参数平铺在同一拍上。`;
 
 /** 节点类型 → 建议的默认标题，用于 AI 缺省时兜底 */
 export const KIND_DEFAULT_TITLE: Record<NodeKind, string> = {

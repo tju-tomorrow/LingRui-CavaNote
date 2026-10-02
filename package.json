@@ -15,7 +15,9 @@
     "packages/ui"
   ],
   "scripts": {
-    "dev": "bun run --filter @lingrui/web dev",
+    "dev": "bash scripts/dev.sh",
+    "desktop": "bun run --filter @lingrui/desktop dev",
+    "dev:web": "bun run --filter @lingrui/web dev",
     "dev:collab": "bun run --filter @lingrui/collab dev",
     "dev:desktop": "bun run --filter @lingrui/desktop dev",
     "build:desktop": "bun run --filter @lingrui/desktop build",

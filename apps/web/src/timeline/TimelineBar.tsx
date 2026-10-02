@@ -8,6 +8,7 @@
 import { useEffect } from "react";
 import { formatTime, player, usePlayer } from "../state/player";
 import { setFocus } from "../state/focus";
+import { clearTimeline } from "../chat/agent";
 import { ShotStrip } from "./ShotStrip";
 import { ProgressPanel } from "./ProgressPanel";
 import "./timeline.css";
@@ -72,6 +73,16 @@ export function TimelineBar() {
           title="跳到下一个动作"
         >
           ≫ 快进
+        </button>
+
+        <button
+          className="tl-btn"
+          type="button"
+          onClick={() => clearTimeline()}
+          disabled={!hasScript}
+          title="清空演出，重新开始"
+        >
+          清空
         </button>
 
         {!hasScript ? <span className="tl-hint">和 AI 对话后自动生成时间轴</span> : null}

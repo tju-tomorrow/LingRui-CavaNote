@@ -103,6 +103,39 @@ export function removeKnowledgeCard(nodeId: string): boolean {
 }
 
 /**
+ * 在文档末尾追加一个段落 —— Agent 扩展笔记用。
+ *
+ * 返回是否真的写入（编辑器未就绪 / 空文本 → false）。
+ */
+export function appendNoteParagraph(text: string): boolean {
+  if (!editor) return false;
+  const content = text.trim();
+  if (!content) return false;
+  const blocks = editor.document;
+  const last = blocks[blocks.length - 1];
+  const block = { type: "paragraph" as const, content };
+  if (last) editor.insertBlocks([block], last.id, "after");
+  else if (blocks[0]) editor.insertBlocks([block], blocks[0].id, "before");
+  else return false;
+  return true;
+}
+
+/**
+ * 在文档末尾插入一个「概念画布」嵌入块 —— Agent 新建概念画布时用。
+ * 块只存 canvasId，点它就把右侧画布切过去。
+ */
+export function insertCanvasEmbed(canvasId: string): boolean {
+  if (!editor || !canvasId) return false;
+  const blocks = editor.document;
+  const last = blocks[blocks.length - 1];
+  const block = { type: "canvasEmbed" as const, props: { canvasId } };
+  if (last) editor.insertBlocks([block], last.id, "after");
+  else if (blocks[0]) editor.insertBlocks([block], blocks[0].id, "before");
+  else return false;
+  return true;
+}
+
+/**
  * 文档正文 → Markdown（导出用）。
  *
  * 自定义块（knowledgeCard）由 BlockNote 尽力转换；没有该 API 时返回空串，
@@ -119,4 +152,55 @@ export async function docToMarkdown(): Promise<string> {
   } catch {
     return "";
   }
+}
+
+/** 从内联内容里取纯文本（递归拿 text 节点） */
+function inlineText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((c) => {
+      const node = c as { text?: unknown; content?: unknown };
+      if (typeof node.text === "string") return node.text;
+      if (Array.isArray(node.content)) return inlineText(node.content);
+      return "";
+    })
+    .join("")
+    .trim();
+}
+
+export interface OutlineItem {
+  level: number;
+  title: string;
+  /** 该标题下的第一段正文（做旁白用） */
+  body: string;
+}
+
+/**
+ * 当前文档的「标题大纲」—— 供「根据笔记生成画布」把笔记结构变成流程图。
+ *
+ * 只取标题 + 每个标题下的第一段，避免把整篇笔记拆成一堆碎节点。
+ */
+export function noteOutline(): OutlineItem[] {
+  if (!editor) return [];
+  const out: OutlineItem[] = [];
+  let current: OutlineItem | null = null;
+  for (const block of editor.document) {
+    if (block.type === "heading") {
+      const level = (block.props as { level?: number }).level ?? 1;
+      const title = inlineText(block.content);
+      if (!title) continue;
+      current = { level, title, body: "" };
+      out.push(current);
+    } else if (current && !current.body) {
+      if (
+        block.type === "paragraph" ||
+        block.type === "bulletListItem" ||
+        block.type === "numberedListItem"
+      ) {
+        const text = inlineText(block.content);
+        if (text) current.body = text;
+      }
+    }
+  }
+  return out;
 }

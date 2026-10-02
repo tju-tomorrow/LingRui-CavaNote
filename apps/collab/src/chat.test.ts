@@ -4,7 +4,7 @@
  * 用一个桩上游服务冒充 OpenAI（SSE 流），验证：
  *   1. 文本增量被转成 NDJSON 的 {type:"text",delta}
  *   2. 分片的 tool_calls 被拼装完整后以 {type:"tool"} 下发一次
- *   3. 未配置 key 时返回 503（客户端据此降级到本地 planner）
+ *   3. 未配置 key 时返回 503（客户端据此提示需要 AI 服务）
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createServer, type IncomingMessage, type Server } from "node:http";

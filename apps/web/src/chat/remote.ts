@@ -3,7 +3,11 @@
  *
  * 与服务端 apps/collab/src/chat.ts 的 NDJSON 协议一一对应。
  */
-import { authToken } from "../auth/store";
+import { CHAT_API, remoteEnabled } from "./config";
+import { currentToken } from "../collab/token";
+
+// 地址解析放在 ./config，避免与 auth/store 形成循环依赖；这里原样转出。
+export { CHAT_API, remoteEnabled };
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -16,19 +20,22 @@ export type RemoteEvent =
   | { type: "error"; message: string }
   | { type: "done" };
 
+/**
+ * /api/chat 非 2xx 时抛出，带上 HTTP status。
+ * 让调用方能把「需要登录（401）」「未配置 LLM（503）」等分别讲清楚。
+ */
+export class ChatApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ChatApiError";
+    this.status = status;
+  }
+}
+
 /** 桌面端桥（preload 注入）；web 版不存在 */
 const bridge = typeof window === "undefined" ? undefined : window.lingrui;
-
-/**
- * 后端目标解析顺序：
- *   1. 桌面端内嵌服务（随机端口 + 一次性 token，Key 只在主进程）
- *   2. web 版：Vite 代理的 /api/chat
- *   3. 显式设 "off" 可强制只用本地 planner
- */
-export const CHAT_API: string =
-  bridge?.chatApi ?? (import.meta.env.VITE_CHAT_API as string | undefined) ?? "/api/chat";
-
-export const remoteEnabled = CHAT_API !== "off";
 
 export interface RemoteExtras {
   /** 结构化画布上下文（已渲染成文本，见 snapshotToPrompt） */
@@ -42,13 +49,16 @@ export async function* streamRemote(
   signal: AbortSignal,
   extras: RemoteExtras = {},
 ): AsyncGenerator<RemoteEvent> {
+  const token = currentToken();
   const response = await fetch(CHAT_API, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      // 桌面端内嵌服务用一次性 token；web 端登录后带上登录 token
+      // 桌面端内嵌服务用一次性 token；web 端登录后带上登录 token。
+      // 未登录时也带上回退 token（VITE_COLLAB_TOKEN）——它与 WebSocket 用的是同一份，
+      // 否则 /api/chat 会 401，AI 直接不可用，看起来像「根本没接上」。
       ...(bridge?.token ? { "x-lingrui-token": bridge.token } : {}),
-      ...(authToken() ? { authorization: `Bearer ${authToken()}` } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ messages, ...extras }),
     signal,
@@ -56,8 +66,9 @@ export async function* streamRemote(
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    // 503 = 服务端没配 LLM，属于"正常的降级信号"，不要把整段错误抛给用户
-    throw new Error(`chat api ${response.status}: ${detail.slice(0, 200)}`);
+    // 带 status 抛出：调用方据此区分「需要登录 / 未配置」等，给出可见提示，
+    // 而不是把所有失败都装成同一种"静默降级"。
+    throw new ChatApiError(`chat api ${response.status}: ${detail.slice(0, 200)}`, response.status);
   }
   if (!response.body) throw new Error("chat api 没有响应体");
 

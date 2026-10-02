@@ -60,10 +60,10 @@ export function PetLayer(): JSX.Element | null {
   });
   const dragRef = useRef<{ x: number; y: number; right: number; bottom: number; moved: boolean } | null>(null);
 
-  // 建立控制器 + rAF 渲染（组件 unmount / 换宠时重建）
+  // 建立控制器 + rAF 渲染（仅像素形态；ASCII/VRM 用各自的渲染分支）
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !pet) return;
+    if (!canvas || !pet || pet.form !== "pixel") return;
 
     const controller = createPixelPet(canvas, pet);
     controllerRef.current = controller;
@@ -121,7 +121,7 @@ export function PetLayer(): JSX.Element | null {
     return () => clearTimeout(timer);
   }, [focus]);
 
-  if (!pet || pet.form !== "pixel") return null;
+  if (!pet) return null;
 
   // 演出进行中：旁白交给底部字幕条（大字、居中），宠物旁边不再重复一遍小气泡
   const bubble = performing ? null : (narration ?? (focus ? "我来讲解这条链路 →" : null));
@@ -220,7 +220,19 @@ export function PetLayer(): JSX.Element | null {
           }
         }}
       >
-        <canvas ref={canvasRef} />
+        {pet.form === "pixel" ? (
+          <canvas ref={canvasRef} />
+        ) : pet.avatar.kind === "ascii" ? (
+          // ASCII 形态：直接把 art 逐行渲染（PRD/宠物.md 的极简形态）
+          <pre className="pet-ascii" aria-hidden="true">
+            {pet.avatar.art.join("\n")}
+          </pre>
+        ) : (
+          // VRM 形态：接口/常量已就位，但缺 .vrm 资产，先给占位（不再静默消失）
+          <div className="pet-vrm-stub" title="VRM 形态需要 .vrm 资产（暂未接入）">
+            VRM
+          </div>
+        )}
       </div>
       <span style={{ fontSize: 11, color: "#8a8a8a" }}>{pet.name}</span>
     </div>

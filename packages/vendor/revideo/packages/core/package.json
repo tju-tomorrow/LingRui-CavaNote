@@ -1,0 +1,40 @@
+{
+  "name": "@revideo/core",
+  "version": "0.11.0",
+  "description": "A web-based framework for creating videos programmatically",
+  "main": "lib/index.js",
+  "author": "revideo",
+  "homepage": "https://re.video/",
+  "bugs": "https://github.com/midrender/revideo/issues",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsc -p tsconfig.build.json -w",
+    "build": "tsc -p tsconfig.build.json",
+    "bundle": "rollup -c rollup.config.mjs",
+    "test": "vitest"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midrender/revideo.git"
+  },
+  "files": [
+    "lib",
+    "tsconfig.project.json",
+    "project.d.ts",
+    "shaders"
+  ],
+  "dependencies": {
+    "culori": "^4.0.1",
+    "mp4-wasm": "^1.0.6"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.9",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/culori": "^2.1.1",
+    "jsdom": "^29.1.1",
+    "rollup": "^4.62.2"
+  }
+}

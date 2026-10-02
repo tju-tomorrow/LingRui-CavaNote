@@ -33,6 +33,15 @@ describe("executeTool / spawnNode", () => {
     expect(a?.relations).toHaveLength(1);
   });
 
+  test("shape 写进 meta，AI 也能选真机/网络图标", () => {
+    const c = ctx();
+    executeTool(c, {
+      name: "spawnNode",
+      input: { id: "firewall", kind: "gateway", title: "防火墙", shape: "net.firewall", at: [0, 0] },
+    });
+    expect(readNode(c.doc, "firewall")?.meta?.["shape"]).toBe("net.firewall");
+  });
+
   test("缺少必填字段时失败且不写库", () => {
     const c = ctx();
     const r = executeTool(c, { name: "spawnNode", input: { id: "", kind: "service", title: "X", at: [0, 0] } });
@@ -299,5 +308,21 @@ describe("Annotation 类工具", () => {
 
     applyPending(c, held.pending!.call);
     expect(readAnnotation(c.doc, "yours")).toBeUndefined();
+  });
+});
+
+describe("executeTool / emphasize", () => {
+  test("产出 emphasize 动作", () => {
+    const c = ctx();
+    executeTool(c, { name: "spawnNode", input: { id: "db", kind: "database", title: "库", at: [0, 0] } });
+    const r = executeTool(c, { name: "emphasize", input: { nodeId: "db", style: "circle" } });
+    expect(r.ok).toBe(true);
+    expect(r.actions).toEqual([{ t: 0, kind: "emphasize", nodeId: "db", style: "circle", text: undefined }]);
+  });
+
+  test("节点不存在则失败", () => {
+    const c = ctx();
+    const r = executeTool(c, { name: "emphasize", input: { nodeId: "nope", style: "box" } });
+    expect(r.ok).toBe(false);
   });
 });

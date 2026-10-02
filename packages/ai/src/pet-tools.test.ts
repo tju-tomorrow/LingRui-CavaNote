@@ -6,7 +6,6 @@ import {
   bodyColorFromText,
   executePetTool,
   paletteFromColor,
-  planPet,
   toPetToolCall,
 } from "./pet-tools";
 
@@ -94,7 +93,7 @@ describe("executePetTool", () => {
   });
 });
 
-describe("palette + planPet", () => {
+describe("palette", () => {
   test("paletteFromColor 生成 5 槽", () => {
     const p = paletteFromColor("#5b8def");
     expect(p.length).toBe(5);
@@ -109,17 +108,6 @@ describe("palette + planPet", () => {
     expect(bodyColorFromText("一只宠物")).toBeUndefined();
   });
 
-  test("planPet 命中创建意图", () => {
-    const plan = planPet("养一只蓝色的猫老师", { hasPets: false });
-    expect(plan.calls.length).toBe(1);
-    expect(plan.calls[0]?.name).toBe("createPet");
-    expect(plan.reply).toContain("猫老师");
-  });
-
-  test("planPet 对无关输入不动作", () => {
-    expect(planPet("解释一下网关", { hasPets: false }).calls.length).toBe(0);
-  });
-
   test("PET_TOOLS 名单完整", () => {
     expect(PET_TOOL_NAMES).toContain("createPet");
     expect(PET_TOOL_NAMES.length).toBe(5);
@@ -128,9 +116,5 @@ describe("palette + planPet", () => {
   test("toPetToolCall 识别宠物工具、拒绝未知", () => {
     expect(toPetToolCall("createPet", { name: "x" })).toMatchObject({ name: "createPet" });
     expect(toPetToolCall("spawnNode", {})).toHaveProperty("error");
-  });
-
-  test("planPet 不误伤画布指令", () => {
-    expect(planPet("添加一个 Kafka 消息队列", { hasPets: false }).calls.length).toBe(0);
   });
 });

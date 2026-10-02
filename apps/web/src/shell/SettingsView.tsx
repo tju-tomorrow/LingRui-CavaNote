@@ -117,7 +117,7 @@ export function SettingsView() {
           <span>对话接口</span>
           <span className="settings-dim">
             {CHAT_API}
-            {remoteEnabled ? "" : "（已关闭，只用本地讲解器）"}
+            {remoteEnabled ? "" : "（已关闭，AI 不可用）"}
           </span>
         </div>
       </section>

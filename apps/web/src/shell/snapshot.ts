@@ -8,9 +8,11 @@
  *   - `auto`：AI 每轮动手前自动打的点，用于「回到 AI 改之前」，只留最近 10 份
  */
 import {
+  getAnnotations,
   getLayout,
   getNodes,
   getOrder,
+  type Annotation,
   type KnowledgeNode,
 } from "@lingrui/knowledge";
 import { ydoc } from "../collab/doc";
@@ -25,6 +27,8 @@ export interface Snapshot {
   label?: string;
   nodes: KnowledgeNode[];
   layout: Record<string, { x: number; y: number }>;
+  /** 注释（便签/文本/高亮/形状/手绘/箭头）——之前快照不含，恢复就丢 */
+  annotations?: Annotation[];
 }
 
 function read(): Snapshot[] {
@@ -63,6 +67,7 @@ function capture(reason: Snapshot["reason"], label?: string): Snapshot {
     ...(label ? { label } : {}),
     nodes: [...getNodes(ydoc).values()],
     layout: getLayout(ydoc).toJSON(),
+    annotations: [...getAnnotations(ydoc).values()],
   };
 }
 
@@ -118,5 +123,10 @@ export function restoreSnapshot(snap: Snapshot): void {
     const layout = getLayout(ydoc);
     for (const id of [...layout.keys()]) layout.delete(id);
     for (const [id, at] of Object.entries(snap.layout)) layout.set(id, at);
+
+    // 注释也一并恢复（老快照没有 annotations 字段 → 当空，不报错）
+    const annotations = getAnnotations(ydoc);
+    for (const id of [...annotations.keys()]) annotations.delete(id);
+    for (const annotation of snap.annotations ?? []) annotations.set(annotation.id, annotation);
   });
 }

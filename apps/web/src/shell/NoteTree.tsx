@@ -27,20 +27,26 @@ import {
   getNotes,
   listNotes,
   moveNoteTo,
-  readNote,
-  reconcileBlockIds,
-  removeNoteDeep,
   renameNote,
+  trashNoteDeep,
   type NoteMeta,
   type NoteTreeNode,
 } from "@lingrui/knowledge";
 import { ydoc } from "../collab/doc";
-import { useKnowledgeNodes, useKnowledgeNotes } from "../collab/useKnowledge";
+import { useKnowledgeNodes, useKnowledgeNotes, useTrashedNotes } from "../collab/useKnowledge";
 import { setFocus, useFocus } from "../state/focus";
 import { setActiveNote, useActiveNote } from "../state/notes";
 import { toastAction } from "./actions";
-import { ContextMenu, type MenuItem } from "./ContextMenu";
-import { IconChevron, IconFolder, IconMore, IconNote } from "./icons";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "../components/ui/context-menu";
+import { IconChevron, IconFolder, IconMore, IconNote, IconTrash } from "./icons";
+import { TrashDialog } from "./TrashDialog";
 
 /** 折叠状态存 localStorage：刷新后保持展开的样子 */
 const COLLAPSED_KEY = "lingrui-tree-collapsed";
@@ -81,18 +87,15 @@ function findNode(list: NoteTreeNode[], id: string): NoteTreeNode | undefined {
   return undefined;
 }
 
-function flattenIds(node: NoteTreeNode): string[] {
-  return [node.note.id, ...node.children.flatMap(flattenIds)];
-}
-
 export function NoteTree() {
   const nodes = useKnowledgeNodes();
   const notes = useKnowledgeNotes();
+  const trashed = useTrashedNotes();
   const active = useActiveNote();
   const focus = useFocus();
   const { collapsed, toggle } = useCollapsed();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; noteId: string } | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ id: string; pos: DropPos } | null>(null);
   // 拖拽源/落点用 ref：dragover 与 drop 可能同 tick，state 还没提交
@@ -122,38 +125,25 @@ export function NoteTree() {
 
   const remove = useCallback(
     (note: NoteMeta) => {
-      // 圈定这次删除会动到的 Y 类型，建一个「只跟踪这一步」的 UndoManager，
-      // 这样 toast 里的「撤销」能整段还原（Yjs 删除是墓碑，可逆）。
-      const target = findNode(tree, note.id);
-      const ids = target ? flattenIds(target) : [note.id];
-      const scopes: Y.AbstractType<unknown>[] = [
-        getNotes(ydoc) as unknown as Y.AbstractType<unknown>,
-      ];
-      for (const id of ids) {
-        const fragment = readNote(ydoc, id)?.fragment;
-        if (fragment) scopes.push(ydoc.getXmlFragment(fragment) as unknown as Y.AbstractType<unknown>);
-      }
-      const undo = new Y.UndoManager(scopes, { captureTimeout: 0 });
-
+      // 软删除：只改 notes map（打 trashedAt），Yjs 墓碑仍在 →
+      // 建一个「只跟踪这一步」的 UndoManager，toast 里的「撤销」能整段还原。
+      const undo = new Y.UndoManager([getNotes(ydoc) as unknown as Y.AbstractType<unknown>], {
+        captureTimeout: 0,
+      });
       ydoc.transact(() => {
-        removeNoteDeep(ydoc, note.id);
+        trashNoteDeep(ydoc, note.id);
       });
 
-      // 对账：清掉指向已不存在文档块的幽灵引用
-      const survivors = listNotes(ydoc)
-        .map((n) => n.fragment)
-        .filter(Boolean);
-      reconcileBlockIds(ydoc, survivors);
-
+      // listNotes 已排除回收站，所以这里天然只会选到还活着的笔记
       const remaining = listNotes(ydoc);
       if (active === note.id || !remaining.some((n) => n.id === active)) {
-        const next = remaining.find((n) => n.id !== note.id && !n.isFolder);
+        const next = remaining.find((n) => !n.isFolder);
         if (next) setActiveNote(next.id);
       }
 
-      toastAction(`已删除「${note.title}」`, "撤销", () => undo.undo());
+      toastAction(`已移入回收站「${note.title}」`, "撤销", () => undo.undo());
     },
-    [tree, active],
+    [active],
   );
 
   // ---------------- 拖拽 ----------------
@@ -259,29 +249,40 @@ export function NoteTree() {
     return () => window.removeEventListener("keydown", onKey);
   }, [active, byId, parentOfActive, addNote, addFolder, remove]);
 
-  const openMenu = (e: ReactMouseEvent, noteId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMenu({ x: e.clientX, y: e.clientY, noteId });
-  };
-
-  const menuItems = (note: NoteMeta): MenuItem[] => {
-    const items: MenuItem[] = [];
-    if (note.isFolder) {
-      items.push({ label: "新建笔记", hint: "⌘N", onSelect: () => addNote(note.id) });
-      items.push({ label: "新建子分组", hint: "⇧⌘N", onSelect: () => addFolder(note.id) });
-    } else {
-      items.push({ label: "打开", onSelect: () => setActiveNote(note.id) });
-      items.push({
-        label: "在此层级新建笔记",
-        hint: "⌘N",
-        onSelect: () => addNote(note.parentId ?? null),
-      });
-    }
-    items.push({ label: "重命名", hint: "F2", onSelect: () => setEditingId(note.id) });
-    items.push({ label: "删除", hint: "⌫", danger: true, onSelect: () => remove(note) });
-    return items;
-  };
+  /** 右键 / 「⋯」共用的菜单项（shadcn ContextMenu） */
+  const renderMenuItems = (note: NoteMeta) => (
+    <>
+      {note.isFolder ? (
+        <>
+          <ContextMenuItem onSelect={() => addNote(note.id)}>
+            新建笔记
+            <ContextMenuShortcut>⌘N</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => addFolder(note.id)}>
+            新建子分组
+            <ContextMenuShortcut>⇧⌘N</ContextMenuShortcut>
+          </ContextMenuItem>
+        </>
+      ) : (
+        <>
+          <ContextMenuItem onSelect={() => setActiveNote(note.id)}>打开</ContextMenuItem>
+          <ContextMenuItem onSelect={() => addNote(note.parentId ?? null)}>
+            在此层级新建笔记
+            <ContextMenuShortcut>⌘N</ContextMenuShortcut>
+          </ContextMenuItem>
+        </>
+      )}
+      <ContextMenuSeparator />
+      <ContextMenuItem onSelect={() => setEditingId(note.id)}>
+        重命名
+        <ContextMenuShortcut>F2</ContextMenuShortcut>
+      </ContextMenuItem>
+      <ContextMenuItem variant="destructive" onSelect={() => remove(note)}>
+        删除
+        <ContextMenuShortcut>⌫</ContextMenuShortcut>
+      </ContextMenuItem>
+    </>
+  );
 
   const renderRow = (node: NoteTreeNode) => {
     const { note, children, depth } = node;
@@ -316,6 +317,8 @@ export function NoteTree() {
 
     return (
       <div key={note.id} className="tree-branch">
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
         <div
           className={`tree-item${active === note.id ? " active" : ""}${isFolder ? " tree-folder" : ""}${dragId === note.id ? " dragging" : ""}${dropClass}`}
           style={{ paddingLeft: indent }}
@@ -341,7 +344,6 @@ export function NoteTree() {
             e.preventDefault();
             applyDrop();
           }}
-          onContextMenu={(e) => openMenu(e, note.id)}
           onClick={(e) => {
             if (isFolder) return;
             if ((e.target as HTMLElement).closest("button.tree-twisty")) return;
@@ -394,19 +396,36 @@ export function NoteTree() {
                 ＋
               </button>
             ) : null}
-            <button type="button" title="更多" onClick={(e) => openMenu(e, note.id)}>
+            <button
+              type="button"
+              title="更多"
+              onClick={(e) => {
+                e.stopPropagation();
+                // 让 Radix 的 ContextMenu 在按钮处打开（派发一个冒泡的 contextmenu）
+                const row = e.currentTarget.closest(".tree-item");
+                const rect = e.currentTarget.getBoundingClientRect();
+                row?.dispatchEvent(
+                  new MouseEvent("contextmenu", {
+                    bubbles: true,
+                    clientX: rect.left,
+                    clientY: rect.bottom,
+                  }),
+                );
+              }}
+            >
               <IconMore size={14} />
             </button>
           </span>
         </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent>{renderMenuItems(note)}</ContextMenuContent>
+        </ContextMenu>
 
         {isFolder && !isCollapsed ? children.map(renderRow) : null}
         {!isFolder ? children.map(renderRow) : null}
       </div>
     );
   };
-
-  const menuNote = menu ? byId.get(menu.noteId) : undefined;
 
   return (
     <nav className="tree" onContextMenu={(e) => e.preventDefault()}>
@@ -440,6 +459,17 @@ export function NoteTree() {
         ＋ 新建笔记
       </button>
 
+      <button
+        type="button"
+        className="tree-trash"
+        onClick={() => setTrashOpen(true)}
+        title="回收站"
+      >
+        <IconTrash size={14} />
+        <span>回收站</span>
+        {trashed.length > 0 ? <span className="tree-trash-count">{trashed.length}</span> : null}
+      </button>
+
       <div className="tree-group">知识节点（{nodes.length}）</div>
       {nodes.map((n) => (
         <button
@@ -455,14 +485,7 @@ export function NoteTree() {
         </button>
       ))}
 
-      {menu && menuNote ? (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          items={menuItems(menuNote)}
-          onClose={() => setMenu(null)}
-        />
-      ) : null}
+      {trashOpen ? <TrashDialog onClose={() => setTrashOpen(false)} /> : null}
     </nav>
   );
 }

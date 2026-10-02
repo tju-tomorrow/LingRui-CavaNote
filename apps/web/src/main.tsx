@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { TooltipProvider } from "./components/ui/tooltip";
 import "./index.css";
 import "./shell/polish.css";
 
@@ -15,6 +16,9 @@ if (window.lingrui?.isDesktop) {
 // 因此这里恢复 StrictMode。详见 docs/adr/0009-canvas-and-runtime-sync.md。
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    {/* Radix 的 Tooltip.Root 要求祖先里有 Provider；挂一次在根上（TopBar 等都用它） */}
+    <TooltipProvider>
+      <App />
+    </TooltipProvider>
   </StrictMode>,
 );

@@ -30,8 +30,8 @@
 }
 
 .tl .tl-btn:not(:disabled):hover {
-  border-color: var(--accent, #5b5bd6);
-  color: var(--accent, #5b5bd6);
+  border-color: var(--accent, #18181b);
+  color: var(--accent, #18181b);
 }
 
 .tl .tl-rate {
@@ -48,7 +48,7 @@
 
 .tl .tl-range {
   flex: 1;
-  accent-color: var(--accent, #5b5bd6);
+  accent-color: var(--accent, #18181b);
 }
 
 .tl .tl-hint {
@@ -87,8 +87,8 @@
 }
 
 .tl .tl-shot.active {
-  border-color: var(--accent, #5b5bd6);
-  background: #eef0ff;
+  border-color: var(--accent, #18181b);
+  background: #f4f4f5;
 }
 
 .tl .tl-shot-svg {
@@ -156,8 +156,8 @@
 }
 
 .tl .tl-progress-item.current {
-  background: #eef0ff;
-  color: var(--accent, #5b5bd6);
+  background: #f4f4f5;
+  color: var(--accent, #18181b);
 }
 
 .tl .tl-progress-mark {
@@ -177,7 +177,7 @@
 }
 
 .tl .tl-progress-mark.st-learning {
-  color: var(--accent, #5b5bd6);
+  color: var(--accent, #18181b);
 }
 
 .tl .tl-progress-title {

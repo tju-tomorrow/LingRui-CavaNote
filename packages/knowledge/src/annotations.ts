@@ -47,6 +47,8 @@ export interface AnnotationElement {
 export interface Annotation {
   id: AnnotationId;
   type: AnnotationType;
+  /** 属于哪张概念画布；省略 = 旧数据 / 全局（回落到「全局那张图」） */
+  canvasId?: string;
   /** 挂到某个节点；省略 = 自由注释（不隶属任何知识节点） */
   attachedTo?: NodeId;
   element: AnnotationElement;
@@ -59,6 +61,8 @@ export interface Chapter {
   id: ChapterId;
   title: string;
   order: number;
+  /** 属于哪张概念画布；省略 = 旧数据 / 全局 */
+  canvasId?: string;
   /** 时间轴起始秒（分镜缩略图点击定位用） */
   startT?: number;
   /**
@@ -114,8 +118,9 @@ export function getChapters(doc: Y.Doc): Y.Array<Chapter> {
 }
 
 /** 按 order 排序的章节列表 */
-export function listChapters(doc: Y.Doc): Chapter[] {
-  return [...getChapters(doc)].sort((a, b) => a.order - b.order);
+export function listChapters(doc: Y.Doc, canvasId?: string): Chapter[] {
+  const all = [...getChapters(doc)].sort((a, b) => a.order - b.order);
+  return canvasId ? all.filter((c) => c.canvasId === canvasId) : all;
 }
 
 export function upsertChapter(doc: Y.Doc, chapter: Chapter): void {
@@ -135,6 +140,18 @@ export function replaceChapters(doc: Y.Doc, chapters: Chapter[]): void {
   const arr = getChapters(doc);
   arr.delete(0, arr.length);
   if (chapters.length > 0) arr.push(chapters);
+}
+
+/**
+ * 只替换某张画布的分镜，其它画布的保留。
+ * 画布是完整资产：分镜按 canvasId 隔离，切画布不会串场。
+ */
+export function replaceCanvasChapters(doc: Y.Doc, canvasId: string, chapters: Chapter[]): void {
+  const arr = getChapters(doc);
+  const others = arr.toArray().filter((c) => c.canvasId !== canvasId);
+  const next = [...others, ...chapters.map((c) => ({ ...c, canvasId }))];
+  arr.delete(0, arr.length);
+  if (next.length > 0) arr.push(next);
 }
 
 // ---- progress：按 userId 分桶 ----

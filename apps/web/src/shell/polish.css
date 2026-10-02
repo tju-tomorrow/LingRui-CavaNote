@@ -5,65 +5,66 @@
  * 不改任何布局结构 / 类名 / 交互，功能零影响。
  * ===================================================================== */
 
-/* ---------- 1. 设计 token ---------- */
+/* ---------- 1. 设计 token（对齐 shadcn/ui 的 zinc 中性色）---------- */
 :root {
   --bg: #ffffff;
-  --panel: #f6f6f8;
-  --panel-2: #fbfbfc;
-  --border: #e9e9ee;
-  --border-strong: #dcdce3;
-  --text: #16161a;
-  --text-2: #3c3c46;
-  --muted: #8b8b95;
-  --accent: #5b5bd6;
-  --accent-strong: #4f4fcc;
-  --accent-weak: #eeeefe;
-  --accent-contrast: #ffffff;
-  --ok: #0f7b6c;
+  --panel: #f4f4f5;
+  --panel-2: #fafafa;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --text: #09090b;
+  --text-2: #3f3f46;
+  --muted: #71717a;
+  --accent: #18181b;
+  --accent-strong: #27272a;
+  --accent-weak: #f4f4f5;
+  --accent-contrast: #fafafa;
+  --ok: #16a34a;
   --r-sm: 6px;
-  --r: 9px;
-  --r-lg: 13px;
-  --sh-1: 0 1px 2px rgba(16, 16, 24, 0.05);
-  --sh-2: 0 4px 16px rgba(16, 16, 24, 0.08);
-  --sh-3: 0 20px 50px rgba(16, 16, 24, 0.16);
+  --r: 8px;
+  --r-lg: 12px;
+  --sh-1: 0 1px 2px rgba(9, 9, 11, 0.06);
+  --sh-2: 0 4px 16px rgba(9, 9, 11, 0.08);
+  --sh-3: 0 20px 50px rgba(9, 9, 11, 0.16);
 }
 
 :root[data-theme="dark"] {
-  --bg: #131318;
-  --panel: #1a1a21;
-  --panel-2: #17171d;
-  --border: #2a2a33;
-  --border-strong: #3a3a46;
-  --text: #ececf1;
-  --text-2: #c7c7d0;
-  --muted: #8f8f9c;
-  --accent: #8b8bf0;
-  --accent-strong: #9d9df5;
-  --accent-weak: #252547;
-  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --sh-2: 0 4px 16px rgba(0, 0, 0, 0.45);
-  --sh-3: 0 20px 50px rgba(0, 0, 0, 0.6);
+  --bg: #09090b;
+  --panel: #18181b;
+  --panel-2: #111113;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --text: #fafafa;
+  --text-2: #d4d4d8;
+  --muted: #a1a1aa;
+  --accent: #fafafa;
+  --accent-strong: #e4e4e7;
+  --accent-weak: #27272a;
+  --accent-contrast: #18181b;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --sh-2: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --sh-3: 0 20px 50px rgba(0, 0, 0, 0.65);
 
   /* shadcn 语义色（暗色）—— 供 BlockNote 的斜杠菜单 / 工具栏使用 */
-  --color-background: #131318;
-  --color-foreground: #ececf1;
-  --color-card: #1a1a21;
-  --color-card-foreground: #ececf1;
-  --color-popover: #1f1f26;
-  --color-popover-foreground: #ececf1;
-  --color-primary: #8b8bf0;
-  --color-primary-foreground: #14141a;
-  --color-secondary: #23232c;
-  --color-secondary-foreground: #ececf1;
-  --color-muted: #23232c;
-  --color-muted-foreground: #8f8f9c;
-  --color-accent: #252547;
-  --color-accent-foreground: #a5a5f5;
-  --color-destructive: #e06c6c;
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+  --color-card: #18181b;
+  --color-card-foreground: #fafafa;
+  --color-popover: #18181b;
+  --color-popover-foreground: #fafafa;
+  --color-primary: #fafafa;
+  --color-primary-foreground: #18181b;
+  --color-secondary: #27272a;
+  --color-secondary-foreground: #fafafa;
+  --color-muted: #27272a;
+  --color-muted-foreground: #a1a1aa;
+  --color-accent: #27272a;
+  --color-accent-foreground: #fafafa;
+  --color-destructive: #ff6467;
   --color-destructive-foreground: #ffffff;
-  --color-border: #2a2a33;
-  --color-input: #33333d;
-  --color-ring: #8b8bf0;
+  --color-border: #27272a;
+  --color-input: #3f3f46;
+  --color-ring: #52525b;
 }
 
 body {
@@ -73,7 +74,7 @@ body {
 }
 
 ::selection {
-  background: rgba(91, 91, 214, 0.22);
+  background: rgba(24, 24, 27, 0.22);
 }
 
 /* 细滚动条 */
@@ -251,10 +252,36 @@ body {
   background: var(--bg);
 }
 .doc-header .doc-title {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  background: transparent;
+  margin: 0;
+  padding: 2px 6px;
+  font-family: inherit;
   font-size: 20px;
   font-weight: 680;
   letter-spacing: -0.015em;
   line-height: 1.3;
+  color: var(--text);
+  outline: none;
+  border-radius: 8px;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.doc-header .doc-title:hover {
+  background: var(--panel);
+}
+.doc-header .doc-title:focus {
+  background: var(--bg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.doc-header .doc-title::placeholder {
+  color: var(--muted);
+}
+.doc-header .dh-main {
+  flex: 1;
+  min-width: 0;
 }
 .doc-header .doc-meta {
   margin-top: 5px;
@@ -284,13 +311,13 @@ body {
   transform: translateY(1px);
 }
 .doc-header .dh-btn.primary {
-  background: linear-gradient(180deg, #6a6ae0, var(--accent));
+  background: linear-gradient(180deg, #27272a, var(--accent));
   border-color: var(--accent-strong);
   color: #fff;
-  box-shadow: 0 1px 2px rgba(91, 91, 214, 0.35), 0 6px 16px rgba(91, 91, 214, 0.22);
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.35), 0 6px 16px rgba(24, 24, 27, 0.22);
 }
 .doc-header .dh-btn.primary:not(:disabled):hover {
-  background: linear-gradient(180deg, #6f6fe6, var(--accent-strong));
+  background: linear-gradient(180deg, #18181b, var(--accent-strong));
 }
 
 /* ---------- 6. 分栏 / pane ---------- */
@@ -320,6 +347,18 @@ body {
   /* BlockNote 默认给 0 54px 的左右内边距，窄栏里会把正文挤到 200px 导致标题乱换行；
      这里收窄，改由 .editor-host 统一控制留白 */
   padding-inline: 0;
+}
+
+/*
+ * 空块占位符（"输入 '/' 以使用命令"）与光标对齐。
+ *
+ * BlockNote 把占位符做成 `.bn-block-content`（display:flex）上的 `::after`，
+ * 作为 flex item 默认 `align-self:stretch` 被拉满整行高（~39px），而里面按
+ * line-height（22.5px）**顶对齐**；但光标在 `.bn-inline-content` 里是**垂直居中**的
+ * → 提示文字比光标高约 8px。改成按自身内容高度居中，就和光标同一条水平线。
+ */
+.bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after {
+  align-self: center;
 }
 .editor-host h1 {
   font-size: 25px;
@@ -384,7 +423,7 @@ body {
   border-color: var(--accent-strong);
   color: #fff;
   font-size: 12px;
-  box-shadow: 0 2px 8px rgba(91, 91, 214, 0.35);
+  box-shadow: 0 2px 8px rgba(24, 24, 27, 0.35);
 }
 .tl .tl-controls > .tl-btn:first-child:not(:disabled):hover {
   background: var(--accent-strong);
@@ -424,7 +463,7 @@ body {
   transform: translateY(-1px);
 }
 .tl .tl-shot.active {
-  box-shadow: 0 0 0 1px var(--accent), 0 6px 16px rgba(91, 91, 214, 0.16);
+  box-shadow: 0 0 0 1px var(--accent), 0 6px 16px rgba(24, 24, 27, 0.16);
   background: var(--accent-weak);
 }
 .tl .tl-shot-svg {
@@ -476,7 +515,7 @@ body {
   color: var(--text);
 }
 :root[data-theme="dark"] .doc-header .dh-btn.primary {
-  background: linear-gradient(180deg, #6f6fe6, var(--accent));
+  background: linear-gradient(180deg, #18181b, var(--accent));
   color: #14141a;
 }
 :root[data-theme="dark"] .tl .tl-shot {
@@ -581,6 +620,52 @@ body.col-resizing {
   border-right: none;
 }
 
+/* ---------- 15b. 画布可折叠（笔记优先）---------- */
+/* 收起时：笔记独占工作区，画布 / 分栏 / 时间轴整体退场 */
+.app.lr.canvas-closed:not(.present) .workspace {
+  grid-template-columns: 1fr;
+}
+.app.lr.canvas-closed:not(.present) .workspace .pane.doc-pane {
+  grid-column: 1 / -1;
+}
+/* 全宽正文别拉成一行 —— 收一个舒服的阅读宽度 */
+.app.lr.canvas-closed:not(.present) .editor-host .bn-editor {
+  max-width: 820px;
+  margin-inline: auto;
+}
+
+/* 右缘把手：画布收起时把它叫回来，否则用户不知道画布去哪了 */
+.canvas-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 8px;
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  box-shadow: var(--sh-2);
+  transition: color 0.12s, background 0.12s, padding-right 0.12s;
+}
+.canvas-tab span {
+  writing-mode: vertical-rl;
+}
+.canvas-tab:hover {
+  color: var(--accent);
+  background: var(--accent-weak);
+  padding-right: 11px;
+}
+
 /* ---------- 16. 侧栏视图（知识库 / 项目 / 标签 / 设置）---------- */
 .view-page {
   padding: 16px 18px 48px;
@@ -642,7 +727,7 @@ body.col-resizing {
   border-radius: var(--r);
   padding: 6px 13px;
   font-weight: 550;
-  box-shadow: 0 1px 2px rgba(91, 91, 214, 0.3);
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.3);
 }
 
 /* 暗色：这些视图里有硬编码的浅色底 */
@@ -835,10 +920,667 @@ body.col-resizing {
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* ---------- 20. AI 面板（⌘J）---------- */
+.tb .tb-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.tb .tb-ai:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* 顶栏「画布」开关：默认中性，展开时点亮 */
+.tb .tb-canvas {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.tb .tb-canvas:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+.tb .tb-canvas.is-on {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+:root[data-theme="dark"] .tb .tb-canvas {
+  background: var(--panel);
+}
+
+.ai-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  background: rgba(18, 18, 28, 0.32);
+  backdrop-filter: blur(3px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 8vh;
+}
+.ai-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 92vw);
+  max-height: 78vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-3);
+  overflow: hidden;
+}
+.ai-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.ai-title {
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.ai-sub {
+  font-size: 12px;
+  color: var(--muted);
+  flex: 1;
+}
+.ai-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+.ai-close:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+
+/* 面板里的聊天区：覆盖侧栏那套尺寸 */
+.chat.ai-body {
+  border-top: none;
+  padding: 14px 16px;
+  min-height: 200px;
+  max-height: none;
+  flex: 1;
+  font-size: 13.5px;
+}
+/* 空状态是我改过的结构（标题/说明/示例），必须是竖排 —— 否则会挤成一团 */
+.chat-empty {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+}
+/* 侧栏 dock 里的聊天区 */
+.chat.chat-dock-chat {
+  border-top: none;
+  padding: 0 2px;
+  min-height: 0;
+  max-height: none;
+}
+.chat.chat-dock-chat .chat-messages {
+  gap: 10px;
+}
+.chat.ai-body .chat-messages {
+  gap: 12px;
+}
+.chat.ai-body .chat-input {
+  padding: 9px 11px;
+  border-radius: var(--r);
+}
+.chat.ai-body .chat-send {
+  border-radius: var(--r);
+  padding: 0 12px;
+}
+
+.chat-empty-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+.chat-empty-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.chat-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.chat-example {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.chat-example:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-weak);
+}
+
+/* 视图/笔记树与底部 AI 助手共享侧栏高度 */
+.sidebar .view-host {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- 21. 笔记内查找（⌘F） ---------- */
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.find-bar .find-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+.find-bar .find-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-weak);
+}
+.find-bar .find-count {
+  flex: none;
+  min-width: 44px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.find-bar .find-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.find-bar .find-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.editor-host ::highlight(lr-find) {
+  background: #ffe08a;
+  color: #1a1a1a;
+}
+.editor-host ::highlight(lr-find-active) {
+  background: #ff9f43;
+  color: #1a1a1a;
+}
+:root[data-theme="dark"] .editor-host ::highlight(lr-find) {
+  background: #7a5c00;
+  color: #fff;
+}
+:root[data-theme="dark"] .editor-host ::highlight(lr-find-active) {
+  background: #c97a1a;
+  color: #fff;
+}
+
+/* ---------- 22. 侧栏常驻 AI 助手（对齐参考图） ---------- */
+/* 侧栏是 flex 列：笔记树占满剩余并自己滚，AI 助手固定在底部。
+   显式给 .tree min-height:0，否则它的自动最小尺寸会顶开底部面板。 */
+.app.lr .sidebar {
+  overflow: hidden;
+}
+.app.lr .sidebar .tree {
+  min-height: 0;
+}
+.chat-dock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.chat-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.chat-dock-head:hover {
+  color: var(--accent);
+}
+.chat-dock-title {
+  flex: 1;
+  text-align: left;
+}
+.chat-dock-chev {
+  display: inline-flex;
+  color: var(--muted);
+  transform: rotate(180deg);
+  transition: transform 0.15s;
+}
+.chat-dock-chev.open {
+  transform: rotate(0deg);
+}
+.chat-dock-body {
+  height: min(38vh, 340px);
+  display: flex;
+}
+.chat-dock:not(.open) .chat-dock-body {
+  display: none;
+}
+.chat.chat-dock-chat {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  border-top: none;
+  padding: 2px 12px 12px;
+  font-size: 13px;
+}
+
+/* ---------- 23. 回收站 ---------- */
+.tree .tree-trash {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.tree .tree-trash:hover {
+  background: #ededf3;
+  color: var(--text);
+}
+:root[data-theme="dark"] .tree .tree-trash:hover {
+  background: #23232c;
+}
+.tree .tree-trash-count {
+  margin-left: auto;
+  font-size: 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+.lr-trash {
+  width: min(560px, 92vw);
+}
+.trash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46vh;
+  overflow: auto;
+}
+.trash-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.trash-kind {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--accent);
+  background: var(--accent-weak);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.trash-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.trash-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trash-path {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 24. 标签重命名 / 合并 ---------- */
+.tag-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.tag-detail-head h3 {
+  margin: 0;
+}
+.tag-actions {
+  display: flex;
+  gap: 6px;
+}
+.tag-rename {
+  min-width: 140px;
+  padding: 4px 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+/* ---------- 21. 演示模式：显眼的退出入口 ---------- */
+.present-exit {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  box-shadow: var(--sh-2);
+  transition: background 0.12s, border-color 0.12s;
+}
+.present-exit:hover {
+  background: var(--bg);
+  border-color: var(--border-strong);
+}
+.present-exit kbd {
+  font-size: 10.5px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: var(--muted);
+}
+
 /* ---------- 12. toast ---------- */
 .lr-toast {
   background: rgba(24, 24, 34, 0.94);
   backdrop-filter: blur(8px);
   box-shadow: var(--sh-3);
   font-weight: 500;
+}
+
+/* ---------- 25. 斜杠菜单（正文里输入 / 呼出）---------- */
+/* BlockNote shadcn 默认是通用英文 shadcn 样式：图标 padding 巨大、标题 16px、
+   分类标签英文。这里收成应用自己的密度与配色（配合 zh 词典）。
+
+   ⚠️ shadcn 的 SuggestionMenuItem 会把 item 的 className（bn-suggestion-menu-item）
+   一并透传给图标 / 标题 / 副标题这几个内层 div，所以**必须用直接子选择器**
+   `.bn-suggestion-menu > .bn-suggestion-menu-item`，否则内层也会吃到 flex/padding。 */
+.bn-suggestion-menu {
+  width: 288px;
+  max-width: min(340px, 88vw);
+  max-height: 336px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  box-shadow: var(--sh-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.bn-suggestion-menu::-webkit-scrollbar {
+  width: 8px;
+}
+.bn-suggestion-menu::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+.bn-suggestion-menu-label {
+  padding: 8px 8px 3px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bn-suggestion-menu > .bn-suggestion-menu-item {
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: var(--r);
+  color: var(--text);
+  transition: background 0.1s, color 0.1s;
+}
+.bn-suggestion-menu > .bn-suggestion-menu-item[aria-selected="true"],
+.bn-suggestion-menu > .bn-suggestion-menu-item:hover {
+  background: var(--accent-weak);
+  color: var(--text);
+}
+.bn-suggestion-menu > .bn-suggestion-menu-item > [data-position="left"] {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  color: var(--text-2);
+}
+.bn-suggestion-menu > .bn-suggestion-menu-item > [data-position="left"] svg {
+  width: 16px;
+  height: 16px;
+}
+.bn-suggestion-menu > .bn-suggestion-menu-item .flex-1 > div:first-child {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: inherit;
+}
+.bn-suggestion-menu > .bn-suggestion-menu-item .flex-1 > div:last-child {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.bn-suggestion-menu > .bn-suggestion-menu-item > [data-position="right"] {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------- 26. 空状态 / first-run（「什么都没有」时）---------- */
+.onboarding {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  overflow: auto;
+}
+.ob-card {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+.ob-mark {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+.ob-title {
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.ob-sub {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.ob-form {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+.ob-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+}
+.ob-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.ob-generate {
+  flex: none;
+  padding: 0 18px;
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--r);
+  background: linear-gradient(180deg, #27272a, var(--accent));
+  color: var(--accent-contrast);
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.ob-generate:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ob-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 6px;
+}
+.ob-example {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-2);
+  font-size: 12.5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.ob-example:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-weak);
+}
+.ob-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ob-link {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0;
+}
+.ob-link:hover {
+  color: var(--accent);
+}
+.ob-dot {
+  color: var(--border-strong);
 }

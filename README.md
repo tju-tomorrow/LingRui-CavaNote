@@ -12,7 +12,7 @@ LingRui CavaNote turns "explaining" into "performing": chat with AI to draw your
 
 ## ✨ Features
 
-- **AI × human co-edited canvas** — add nodes, connect, move, delete with plain language. A local rule-based explainer kicks in when no LLM is configured, so **it works out of the box, no API keys needed**
+- **AI × human co-edited canvas** — add nodes, connect, move, delete with plain language. **Requires an LLM** (OpenAI-compatible): there is no local fallback — if the AI service is unreachable, the app says so instead of faking an answer
 - **Docs and canvas in sync** — one knowledge model, two views, bidirectional
 - **Self-explaining canvas** — the explanation plays along a timeline: pause / fast-forward / speed control / replay
 - **Click to dig deeper** — every node's detail card ships with FAQs you can keep asking
@@ -31,7 +31,7 @@ bun install
 bun run dev
 ```
 
-That's it — with **no collab server and no LLM**, data persists to local IndexedDB and the built-in local explainer does the teaching. Zero configuration to try the core experience.
+That's it — data persists to local IndexedDB. **AI features require an LLM** (see the section below); there is no local explainer fallback.
 
 ### Want multi-user collaboration + a real LLM?
 
@@ -75,7 +75,7 @@ bash scripts/dev-collab-oc.sh                   # key is read from ~/.local/shar
 bash scripts/dev-collab-oc.sh deepseek-v4-pro   # optionally pick a model
 ```
 
-Leave it blank and `/api/chat` returns 503 — the app gracefully falls back to the local explainer.
+Leave it blank and `/api/chat` returns 503 — the app tells you the server has no LLM configured (there is no local fallback).
 
 > If Docker Hub is unreachable, pull from a mirror and re-tag, e.g.
 > `docker pull docker.m.daocloud.io/valkey/valkey:8-alpine && docker tag … valkey/valkey:8-alpine`

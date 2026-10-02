@@ -81,7 +81,7 @@ export const SEED_NODES: KnowledgeNode[] = [
 /** 画布上节点的统一尺寸（表现层） */
 /**
  * 节点尺寸：**唯一来源是 @lingrui/ai 的 DEFAULT_NODE_SIZE**。
- * 早先 web 和 ai 各有一份，一旦漂移 planner 算的空位就全错（新节点会压在一起）。
+ * 早先 web 和 ai 各有一份，一旦漂移空位就算错（新节点会压在一起）。
  */
 export const NODE_SIZE = DEFAULT_NODE_SIZE;
 

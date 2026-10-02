@@ -5,7 +5,7 @@
  * （摘要 / 核心作用 / 常见实现 / 关系 / 相关知识），数据来自「唯一真相」Y.Doc。
  * 视频（Revideo）与 PDF 为 P4 后半段。
  */
-import type { KnowledgeNode } from "@lingrui/knowledge";
+import type { Annotation, KnowledgeNode } from "@lingrui/knowledge";
 import { docToMarkdown } from "../editor/bridge";
 
 const KIND_LABEL: Record<string, string> = {
@@ -21,6 +21,15 @@ const KIND_LABEL: Record<string, string> = {
   note: "笔记",
 };
 
+const ANNOTATION_LABEL: Record<string, string> = {
+  sticky: "便签",
+  text: "文本",
+  highlight: "高亮",
+  shape: "形状",
+  arrow: "箭头",
+  draw: "手绘",
+};
+
 /** 画布坐标 → 人类可读的节点关系（nodeId → 标题） */
 function titleOf(nodes: KnowledgeNode[], id: string): string {
   return nodes.find((n) => n.id === id)?.title ?? id;
@@ -30,6 +39,7 @@ export async function buildMarkdown(
   title: string,
   subtitle: string,
   nodes: KnowledgeNode[],
+  annotations: Annotation[] = [],
 ): Promise<string> {
   const doc = await docToMarkdown();
   const lines: string[] = [`# ${title}`, "", `> ${subtitle}`, ""];
@@ -69,6 +79,18 @@ export async function buildMarkdown(
 
     if (node.tags?.length) lines.push("", `**标签**：${node.tags.join("、")}`);
 
+    lines.push("");
+  }
+
+  // 注释（便签/文本/高亮/形状/手绘/箭头）——之前导出不含，用户画的东西会丢
+  if (annotations.length) {
+    lines.push("---", "", "## 注释", "");
+    for (const a of annotations) {
+      const label = ANNOTATION_LABEL[a.type] ?? a.type;
+      const attached = a.attachedTo ? ` → ${titleOf(nodes, a.attachedTo)}` : "";
+      const at = `(${Math.round(a.element.x)}, ${Math.round(a.element.y)})`;
+      lines.push(`- **${label}**${attached} @ ${at}${a.text ? `：${a.text}` : ""}`);
+    }
     lines.push("");
   }
 

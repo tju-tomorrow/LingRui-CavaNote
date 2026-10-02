@@ -43,8 +43,17 @@ PY
   done
 fi
 
-# 本地打包默认不做代码签名，避免无证书时失败（CI 里设 CSC_IDENTITY_AUTO_DISCOVERY=1 覆盖）
-export CSC_IDENTITY_AUTO_DISCOVERY="${CSC_IDENTITY_AUTO_DISCOVERY:-false}"
+# 签名：本机有 "Developer ID Application" 证书就自动签，没有就跳过（避免无证书时打包失败）。
+# 手动覆盖：CSC_IDENTITY_AUTO_DISCOVERY=1/0
+if [[ -z "${CSC_IDENTITY_AUTO_DISCOVERY:-}" ]]; then
+  if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
+    export CSC_IDENTITY_AUTO_DISCOVERY=true
+    echo "[pack] 检测到 Developer ID 证书 → 启用签名"
+  else
+    export CSC_IDENTITY_AUTO_DISCOVERY=false
+    echo "[pack] 未检测到签名证书 → 跳过签名（产物未签名，首次打开需右键「打开」）"
+  fi
+fi
 
 if [[ "${SKIP_TYPECHECK:-0}" != "1" ]]; then
   echo "[pack] 类型检查…"
@@ -63,3 +72,9 @@ fi
 
 echo "[pack] 完成 → apps/desktop/release"
 ls -1 apps/desktop/release 2>/dev/null | sed 's/^/        /' || true
+
+# 未签名：首次打开需右键「打开」或跑一次 xattr -dr com.apple.quarantine
+if [[ "${CSC_IDENTITY_AUTO_DISCOVERY:-false}" == "false" ]]; then
+  echo "[pack] 产物未签名。首次打开若被拦："
+  echo "        xattr -dr com.apple.quarantine \"/Applications/LingRui CavaNote.app\""
+fi

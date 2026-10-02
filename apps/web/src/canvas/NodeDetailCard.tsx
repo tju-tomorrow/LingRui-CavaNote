@@ -19,7 +19,7 @@
  * 编辑策略：本地 draft 驱动输入框（光标不会跳），每次改动立刻写 Y.Doc（Yjs 很便宜）。
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { NODE_STYLE } from "@lingrui/canvas";
+import { NODE_STYLE, type NodeStyleOverride } from "@lingrui/canvas";
 import {
   markHuman,
   readNode,
@@ -34,6 +34,7 @@ import { ydoc } from "../collab/doc";
 import { useReadOnlyShare } from "../shell/share";
 import { setFocus, useFocus } from "../state/focus";
 import { useCanvasVersion } from "./bridge";
+import { revealNode } from "../editor/bridge";
 import { canvasViewportSize, nodeOverlayRect } from "./geometry";
 
 const ORIGIN_LABEL: Record<string, string> = {
@@ -48,6 +49,8 @@ interface Draft {
   tech: string[];
   faq: FaqItem[];
   tags: string[];
+  /** 资产级画布形态预设（ADR-0014 §3） */
+  style?: NodeStyleOverride;
 }
 
 function toDraft(node: KnowledgeNode): Draft {
@@ -58,6 +61,10 @@ function toDraft(node: KnowledgeNode): Draft {
     tech: Array.isArray(node.meta?.["tech"]) ? [...(node.meta["tech"] as string[])] : [],
     faq: (node.faq ?? []).map((f) => ({ ...f })),
     tags: [...(node.tags ?? [])],
+    style:
+      typeof node.meta?.["style"] === "object" && node.meta["style"] !== null
+        ? (node.meta["style"] as NodeStyleOverride)
+        : undefined,
   };
 }
 
@@ -70,6 +77,15 @@ function useMount(): boolean {
 
 let uid = 0;
 const nextId = (prefix: string): string => `${prefix}-${Date.now().toString(36)}-${(uid += 1)}`;
+
+/** 资产外观预设色卡（画布形态，ADR-0014） */
+const STYLE_PRESETS: Array<{ label: string; fillColor: string; strokeColor: string }> = [
+  { label: "靛蓝", fillColor: "#eef2ff", strokeColor: "#4f46e5" },
+  { label: "翠绿", fillColor: "#ecfdf5", strokeColor: "#059669" },
+  { label: "琥珀", fillColor: "#fffbeb", strokeColor: "#d97706" },
+  { label: "玫红", fillColor: "#fdf2f8", strokeColor: "#db2777" },
+  { label: "石板", fillColor: "#f8fafc", strokeColor: "#475569" },
+];
 
 export function NodeDetailCard() {
   const focus = useFocus();
@@ -129,8 +145,17 @@ export function NodeDetailCard() {
     }
     touched.clear();
 
+    if (
+      touched.has("style") &&
+      JSON.stringify(d.style ?? null) !== JSON.stringify(fresh.meta?.["style"] ?? null)
+    ) {
+      next.style = d.style;
+    }
+
     const meta = { ...(fresh.meta ?? {}) };
     if (next.tech) meta["tech"] = next.tech;
+    if (next.style) meta["style"] = next.style;
+    else if ("style" in next) delete meta["style"];
 
     upsertNode(ydoc, {
       ...fresh,
@@ -334,6 +359,13 @@ export function NodeDetailCard() {
         <p className="nd-summary">{node.summary}</p>
       ) : null}
 
+      {/* 长文正文入口（ADR-0014 §4.3：资产像笔记一样，正文在文档块） */}
+      {!editing && (node.blockIds?.length || node.blockId) ? (
+        <button type="button" className="nd-body-btn" onClick={() => revealNode(node.id)}>
+          打开正文 ↗
+        </button>
+      ) : null}
+
       {/* ---- 核心作用 ---- */}
       {editing || d.roles.length > 0 ? (
         <section className="nd-section">
@@ -417,6 +449,35 @@ export function NodeDetailCard() {
                 }}
               />
             ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {/* ---- 外观（资产画布形态） ---- */}
+      {editing ? (
+        <section className="nd-section">
+          <h4>外观（画布形态）</h4>
+          <div className="nd-swatches">
+            <button
+              type="button"
+              className="nd-swatch nd-swatch-default"
+              title="恢复类型默认配色"
+              onClick={() => patch({ style: undefined })}
+            >
+              默认
+            </button>
+            {STYLE_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                className="nd-swatch"
+                title={preset.label}
+                onClick={() =>
+                  patch({ style: { fillColor: preset.fillColor, strokeColor: preset.strokeColor } })
+                }
+                style={{ background: preset.fillColor, borderColor: preset.strokeColor }}
+              />
+            ))}
           </div>
         </section>
       ) : null}

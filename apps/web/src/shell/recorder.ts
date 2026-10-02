@@ -1,19 +1,50 @@
 /**
- * 视频导出（PRD/导出与分发.md §1）
+ * 视频导出（PRD/导出与分发.md §1 / ADR-0013 引擎换成 maxGraph）
  *
- * 用浏览器原生 `MediaRecorder`，把 **Excalidraw 画布 + 宠物覆盖层** 合成到离屏
+ * 用浏览器原生 `MediaRecorder`，把 **maxGraph 画布（SVG）+ 宠物覆盖层** 合成到离屏
  * canvas，一边播放时间轴一边逐帧录制，产出 WebM。
  *
+ * maxGraph 渲染为 SVG，不是 canvas，所以先把容器内的 `<svg>` 序列化 → Image，
+ * 录制期间画布内容不变（只有覆盖层在动），序列化一次即可。
+ *
  * 为什么不用 Revideo：那是 Node/无头 Chromium 的离线渲染，重依赖、要单独服务；
- * 这里先给一个**零依赖、即时可用**的通道，覆盖绝大多数"把演出导成视频"的需求。
- * 同一 `SceneScript` 仍是唯一输入，将来换 Revideo 不用改上游。
+ * 这里先给一个**零依赖、即时可用**的通道。同一 `SceneScript` 仍是唯一输入，
+ * 将来换 Revideo 不用改上游。
+ *
+ * 已知缺口：聚光灯（`.spotlight-layer`）是 DOM 覆盖层，未烘焙进视频。
  */
 import { getPlayerState, player } from "../state/player";
+import { getCanvas } from "../canvas/bridge";
 
-/** 取页面上面积最大的匹配 canvas（Excalidraw 有多层 canvas） */
+/** 取页面上面积最大的匹配 canvas（宠物有多层 canvas） */
 function largestCanvas(selector: string): HTMLCanvasElement | undefined {
   const list = [...document.querySelectorAll<HTMLCanvasElement>(selector)];
   return list.sort((a, b) => b.width * b.height - a.width * a.height)[0];
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("画布 SVG 解码失败"));
+    image.src = url;
+  });
+}
+
+/** 当前画布视口 → 位图（序列化一次，录制期间复用） */
+async function snapshotCanvasImage(
+  width: number,
+  height: number,
+): Promise<HTMLImageElement | undefined> {
+  const engine = getCanvas();
+  const svg = engine?.svg();
+  if (!engine || !svg) return undefined;
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("width", String(width));
+  clone.setAttribute("height", String(height));
+  const xml = new XMLSerializer().serializeToString(clone);
+  return loadImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`);
 }
 
 function pickMime(): string {
@@ -29,12 +60,16 @@ export async function recordAnimation(onProgress?: (t: number, total: number) =>
   if (!script) throw new Error("还没有演出，先和 AI 对话生成时间轴");
   if (typeof MediaRecorder === "undefined") throw new Error("当前环境不支持 MediaRecorder");
 
-  const base = largestCanvas(".excalidraw-host canvas");
-  if (!base) throw new Error("找不到画布");
+  const engine = getCanvas();
+  if (!engine) throw new Error("找不到画布");
+
+  const viewport = engine.viewport();
+  const width = Math.max(1, Math.round(viewport.width)) || 1280;
+  const height = Math.max(1, Math.round(viewport.height)) || 720;
+  const base = await snapshotCanvasImage(width, height);
+  const emphasis = largestCanvas(".emphasis-layer");
   const pet = largestCanvas(".pet-layer canvas");
 
-  const width = base.width || 1280;
-  const height = base.height || 720;
   const out = document.createElement("canvas");
   out.width = width;
   out.height = height;
@@ -60,7 +95,9 @@ export async function recordAnimation(onProgress?: (t: number, total: number) =>
     const draw = () => {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, width, height);
-      if (base.width > 0) ctx.drawImage(base, 0, 0, width, height);
+      if (base) ctx.drawImage(base, 0, 0, width, height);
+      // 手绘强调层（与画布同尺寸，直接叠）
+      if (emphasis && emphasis.width > 0) ctx.drawImage(emphasis, 0, 0, width, height);
       if (pet && pet.width > 0) {
         // 宠物是屏幕固定覆盖层，按画布宽度缩放后放到右下
         const scale = Math.min(1, width / 1600);

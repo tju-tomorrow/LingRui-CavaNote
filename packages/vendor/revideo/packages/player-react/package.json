@@ -1,0 +1,35 @@
+{
+  "name": "@revideo/player-react",
+  "version": "0.11.0",
+  "description": "",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && postcss src/**/*.css --dir dist"
+  },
+  "keywords": [],
+  "author": "revideo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midrender/revideo.git",
+    "directory": "packages/player-react"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "cssnano": "^8.0.2",
+    "postcss": "^8.4.47",
+    "postcss-cli": "^11.0.0",
+    "tailwindcss": "^4.3.2"
+  },
+  "dependencies": {
+    "@revideo/core": "0.11.0",
+    "react": "^19",
+    "react-dom": "^19",
+    "uuid": "^14.0.1"
+  }
+}

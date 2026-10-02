@@ -22,11 +22,32 @@ export function getNotes(doc: Y.Doc): Y.Map<NoteMeta> {
   return doc.getMap<NoteMeta>(ROOT_NOTES);
 }
 
-/** 按 order 再按创建时间排的笔记列表 */
-export function listNotes(doc: Y.Doc): NoteMeta[] {
+/** 按 order 再按创建时间排的**全部**笔记（含回收站） */
+export function listAllNotes(doc: Y.Doc): NoteMeta[] {
   return [...getNotes(doc).values()].sort(
     (a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt - b.createdAt,
   );
+}
+
+/**
+ * 未进回收站的笔记。
+ *
+ * 目录树 / 搜索 / 项目 / 标签视图都只看它 —— 回收站里的内容不该出现在这些地方。
+ * 需要含回收站时用 `listAllNotes`，回收站页用 `listTrashedNotes`。
+ */
+export function listNotes(doc: Y.Doc): NoteMeta[] {
+  return listAllNotes(doc).filter((n) => !n.trashedAt);
+}
+
+/** 回收站里的笔记（最近删的在前） */
+export function listTrashedNotes(doc: Y.Doc): NoteMeta[] {
+  return listAllNotes(doc)
+    .filter((n) => Boolean(n.trashedAt))
+    .sort((a, b) => (b.trashedAt ?? 0) - (a.trashedAt ?? 0));
+}
+
+export function isTrashed(note: NoteMeta | undefined | null): boolean {
+  return Boolean(note?.trashedAt);
 }
 
 export function readNote(doc: Y.Doc, id: NoteId): NoteMeta | undefined {
@@ -258,7 +279,7 @@ export function reconcileBlockIds(doc: Y.Doc, fragmentNames: string[]): number {
   return changed;
 }
 
-/** 递归删掉一篇笔记/分组及其子孙 */
+/** 递归删掉一篇笔记/分组及其子孙（**硬删**；回收站的「彻底删除」见 purgeNoteDeep） */
 export function removeNoteDeep(doc: Y.Doc, id: NoteId): number {
   const tree = buildNoteTree(doc);
   const collect = (nodes: NoteTreeNode[]): string[] =>
@@ -271,6 +292,92 @@ export function removeNoteDeep(doc: Y.Doc, id: NoteId): number {
   const ids = collect(tree);
   for (const target of ids) removeNote(doc, target);
   return ids.length;
+}
+
+// ---------------------------------------------------------------------------
+// 回收站（Yjs 墓碑可恢复）
+// ---------------------------------------------------------------------------
+
+/**
+ * 收集 id 及其全部子孙 —— **从原始 notes map 走，不看 trashedAt**。
+ * 这样回收站里的子树也能被整体恢复 / 彻底删除。带 `seen` 防环。
+ */
+function collectSubtree(doc: Y.Doc, id: string): string[] {
+  const all = [...getNotes(doc).values()];
+  const childrenOf = new Map<string, NoteMeta[]>();
+  for (const note of all) {
+    const key = note.parentId ?? "";
+    const list = childrenOf.get(key);
+    if (list) list.push(note);
+    else childrenOf.set(key, [note]);
+  }
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (nid: string): void => {
+    if (seen.has(nid)) return;
+    seen.add(nid);
+    out.push(nid);
+    for (const child of childrenOf.get(nid) ?? []) walk(child.id);
+  };
+  walk(id);
+  return out;
+}
+
+/** 移进回收站（整棵子树一起）。删除只是打时间戳，Yjs 墓碑仍在，可恢复。 */
+export function trashNoteDeep(doc: Y.Doc, id: NoteId): number {
+  const ids = collectSubtree(doc, id);
+  const notes = getNotes(doc);
+  const at = Date.now();
+  doc.transact(() => {
+    for (const nid of ids) {
+      const note = notes.get(nid);
+      if (note && !note.trashedAt) notes.set(nid, { ...note, trashedAt: at });
+    }
+  });
+  return ids.length;
+}
+
+/**
+ * 从回收站恢复整棵子树。
+ *
+ * 若父级仍在回收站（且不在本次恢复集合里），把这棵挂回顶层 ——
+ * 否则恢复了却挂在一个看不见的父级下，等于没恢复。
+ */
+export function restoreNoteDeep(doc: Y.Doc, id: NoteId): number {
+  const ids = collectSubtree(doc, id);
+  const restoreSet = new Set(ids);
+  const notes = getNotes(doc);
+  doc.transact(() => {
+    for (const nid of ids) {
+      const note = notes.get(nid);
+      if (!note?.trashedAt) continue;
+      const { trashedAt: _drop, ...rest } = note;
+      const parent = note.parentId ? notes.get(note.parentId) : undefined;
+      const parentGone = Boolean(parent?.trashedAt) && !restoreSet.has(parent!.id);
+      notes.set(nid, parentGone ? { ...rest, parentId: null } : rest);
+    }
+  });
+  return ids.length;
+}
+
+/** 彻底删除整棵子树（不可恢复） */
+export function purgeNoteDeep(doc: Y.Doc, id: NoteId): number {
+  const ids = collectSubtree(doc, id);
+  doc.transact(() => {
+    for (const nid of ids) removeNote(doc, nid);
+  });
+  return ids.length;
+}
+
+/** 清空回收站：只对每棵「回收站森林」的根删一次，避免重复计数 */
+export function emptyTrash(doc: Y.Doc): number {
+  const trashed = listTrashedNotes(doc);
+  const trashedIds = new Set(trashed.map((n) => n.id));
+  const roots = trashed.filter((n) => !n.parentId || !trashedIds.has(n.parentId));
+  let count = 0;
+  for (const root of roots) count += purgeNoteDeep(doc, root.id);
+  return count;
 }
 
 /**

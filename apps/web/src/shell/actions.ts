@@ -2,7 +2,7 @@
  * 文档动作：导出 / 保存 / 分享（供顶栏与主标题区复用）+ 轻量 toast。
  */
 import { useCallback, useState } from "react";
-import { useKnowledgeNodes } from "../collab/useKnowledge";
+import { useAnnotations, useKnowledgeNodes } from "../collab/useKnowledge";
 import { buildMarkdown, downloadText } from "./export";
 import { downloadBlob, recordAnimation } from "./recorder";
 import { latestSnapshotAt, saveSnapshot } from "./snapshot";
@@ -61,15 +61,16 @@ function timeLabel(at: number | null): string {
 
 export function useDocumentActions() {
   const nodes = useKnowledgeNodes();
+  const annotations = useAnnotations();
   const [savedAt, setSavedAt] = useState<number | null>(() => latestSnapshotAt());
   const [recording, setRecording] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
   const exportDoc = useCallback(async () => {
-    const md = await buildMarkdown(DOC_TITLE, DOC_SUBTITLE, nodes);
+    const md = await buildMarkdown(DOC_TITLE, DOC_SUBTITLE, nodes, annotations);
     downloadText(`${DOC_TITLE}.md`, md);
     toast("已导出 Markdown");
-  }, [nodes]);
+  }, [nodes, annotations]);
 
   const save = useCallback(() => {
     const snap = saveSnapshot();

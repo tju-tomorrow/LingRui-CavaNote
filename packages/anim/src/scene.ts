@@ -15,6 +15,17 @@ export type { PetState };
 
 export type MascotState = "idle" | "run" | "talk" | "point" | "think";
 
+/** 手绘强调样式（rough.js 画的圈/框/下划线/叉/高亮） */
+export type EmphasisStyle = "circle" | "box" | "underline" | "cross" | "highlight";
+
+export const EMPHASIS_STYLES: readonly EmphasisStyle[] = [
+  "circle",
+  "box",
+  "underline",
+  "cross",
+  "highlight",
+];
+
 /** 旧 mascot 状态 ⇄ 新宠物教学状态（talk 即 explain） */
 export const MASCOT_TO_PET: Record<MascotState, PetState> = {
   idle: "idle",
@@ -50,7 +61,9 @@ export type Action =
   | { t: number; kind: "pet.say"; text: string; nodeId?: string }
   | { t: number; kind: "pet.teach"; nodeId: string; text: string; state?: PetState }
   | { t: number; kind: "pet.react"; to: "confused" | "aha" | "celebrate" }
-  | { t: number; kind: "camera.pan"; to: Vec2; zoom?: number };
+  | { t: number; kind: "camera.pan"; to: Vec2; zoom?: number }
+  // 手绘强调：在节点上画一个圈 / 框 / 下划线 / 叉 / 高亮（rough.js）
+  | { t: number; kind: "emphasize"; nodeId: string; style: EmphasisStyle; text?: string };
 
 export type Vec2 = readonly [number, number];
 
@@ -66,6 +79,8 @@ export interface SceneState {
   nodes: Map<string, NodeVisual>;
   edges: Map<string, EdgeVisual>;
   flows: FlowVisual[];
+  /** 手绘强调（rough.js） */
+  emphases: EmphasisVisual[];
   mascot: { at: Vec2; state: MascotState };
   /** 宠物（Personal Pet）：教学状态的唯一来源 */
   pet: { at: Vec2; state: PetState };
@@ -98,6 +113,16 @@ export interface FlowVisual {
   label?: string;
 }
 
+export interface EmphasisVisual {
+  nodeId: string;
+  style: EmphasisStyle;
+  /** 0→1 手绘描出进度 */
+  draw: number;
+  /** 1→0 淡出系数（强调有时效） */
+  opacity: number;
+  text?: string;
+}
+
 /** 每条动作的默认演出时长（秒） */
 export const DURATION = {
   spawn: 0.4,
@@ -105,6 +130,9 @@ export const DURATION = {
   flow: 0.8,
   camera: 0.6,
   move: 0.9,
+  /** 手绘强调的描出时长 / 整段持续（描完后保持再淡出） */
+  emphasize: 0.6,
+  emphasizeHold: 2.8,
 } as const;
 
 export const easeOutCubic = (x: number): number => 1 - Math.pow(1 - clamp01(x), 3);
@@ -129,6 +157,7 @@ export function sampleAt(script: SceneScript, t: number): SceneState {
     nodes: new Map(),
     edges: new Map(),
     flows: [],
+    emphases: [],
     mascot: { at: petAt, state: "idle" },
     pet: { at: petAt, state: petState },
     camera: { at: [0, 0], zoom: 1 },
@@ -235,6 +264,22 @@ export function sampleAt(script: SceneScript, t: number): SceneState {
       case "camera.pan":
         state.camera = { at: a.to, zoom: a.zoom ?? state.camera.zoom };
         break;
+
+      case "emphasize": {
+        // 强调有时效：描出 → 保持 → 淡出；过期就不画了
+        const age = local;
+        const hold = DURATION.emphasizeHold;
+        if (age > hold) break;
+        const key = `${a.nodeId}:${a.style}`;
+        const draw = easeOutCubic(age / DURATION.emphasize);
+        const opacity = age > hold - 0.5 ? clamp01((hold - age) / 0.5) : 1;
+        // 同一节点同一样式只保留最新一次
+        const existing = state.emphases.findIndex((e) => `${e.nodeId}:${e.style}` === key);
+        const visual: EmphasisVisual = { nodeId: a.nodeId, style: a.style, draw, opacity, text: a.text };
+        if (existing >= 0) state.emphases[existing] = visual;
+        else state.emphases.push(visual);
+        break;
+      }
     }
   }
 

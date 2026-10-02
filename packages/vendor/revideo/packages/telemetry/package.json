@@ -1,0 +1,27 @@
+{
+  "name": "@revideo/telemetry",
+  "version": "0.11.0",
+  "description": "Telemetry for Revideo. Check the documentation to learn how to disable it.",
+  "main": "dist/index.js",
+  "author": "revideo",
+  "homepage": "https://re.video/",
+  "bugs": "https://github.com/midrender/revideo/issues",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsc -w",
+    "build": "tsc",
+    "postinstall": "node src/postinstall.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/midrender/revideo.git"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "dependencies": {
+    "posthog-node": "^5.39.2",
+    "uuid": "^14.0.1"
+  }
+}

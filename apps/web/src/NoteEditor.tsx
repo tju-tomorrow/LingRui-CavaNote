@@ -25,15 +25,26 @@
  *    （那个错误只在"异步恢复旧内容"的竞态里出现）。
  */
 import { useEffect } from "react";
-import { useCreateBlockNote } from "@blocknote/react";
+import {
+  SuggestionMenuController,
+  getDefaultReactSlashMenuItems,
+  useCreateBlockNote,
+  type DefaultReactSuggestionItem,
+} from "@blocknote/react";
+import { filterSuggestionItems } from "@blocknote/core";
 import { withCollaboration } from "@blocknote/core/yjs";
+import { zh } from "@blocknote/core/locales";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
-import { awareness, blockFragment, DEFAULT_NOTE_ID } from "./collab/doc";
+import { Layers } from "lucide-react";
+import { createCanvas } from "@lingrui/knowledge";
+import { awareness, blockFragment, DEFAULT_NOTE_ID, ydoc } from "./collab/doc";
 import type { NoteMeta } from "@lingrui/knowledge";
 import { registerEditor } from "./editor/bridge";
 import { schema } from "./editor/schema";
 import { isReadOnlyShare } from "./shell/share";
+import { setActiveCanvas } from "./state/canvas";
+import { setCanvasOpen } from "./state/layout";
 
 const INITIAL_CONTENT = [
   { type: "heading" as const, props: { level: 1 as const }, content: "一次请求的完整旅程" },
@@ -84,9 +95,11 @@ function NoteEditorInner({ note }: { note: NoteMeta }) {
   const editor = useCreateBlockNote(
     withCollaboration({
       schema,
+      // 中文词典：斜杠菜单 / 占位符 / 空块提示等一律中文（默认是英文）
+      dictionary: zh,
       collaboration: {
         fragment: blockFragment(note),
-        user: { name: "你", color: "#5b5bd6" },
+        user: { name: "你", color: "#18181b" },
         ...(awareness ? { provider: { awareness } } : {}),
       },
     }),
@@ -140,7 +153,42 @@ function NoteEditorInner({ note }: { note: NoteMeta }) {
   return (
     <div className="editor-host">
       {/* 只读分享视图：文档可读不可改（PRD/导出与分发.md §3） */}
-      <BlockNoteView editor={editor} theme="light" editable={!isReadOnlyShare()} />
+      <BlockNoteView
+        editor={editor}
+        theme="light"
+        editable={!isReadOnlyShare()}
+        slashMenu={false}
+      >
+        {/* 自定义斜杠菜单：默认项 + 「概念画布」（/ 直接建一张画布，不再有孤儿块） */}
+        <SuggestionMenuController
+          triggerCharacter="/"
+          getItems={async (query): Promise<DefaultReactSuggestionItem[]> =>
+            filterSuggestionItems(
+              [
+                ...getDefaultReactSlashMenuItems(editor),
+                {
+                  title: "概念画布",
+                  subtext: "为这个概念开一张画布，点开就切过去",
+                  aliases: ["canvas", "画布", "concept"],
+                  icon: <Layers size={18} />,
+                  onItemClick: () => {
+                    const canvas = createCanvas(ydoc, "概念画布", note.id);
+                    const current = editor.getTextCursorPosition().block;
+                    editor.insertBlocks(
+                      [{ type: "canvasEmbed", props: { canvasId: canvas.id } }],
+                      current,
+                      "after",
+                    );
+                    setActiveCanvas(canvas.id);
+                    setCanvasOpen(true);
+                  },
+                },
+              ],
+              query,
+            )
+          }
+        />
+      </BlockNoteView>
     </div>
   );
 }

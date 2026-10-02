@@ -1,5 +1,5 @@
 /**
- * Canvas 工具执行器 —— AI（或本地 planner）真正修改画布的地方
+ * Canvas 工具执行器 —— AI 真正修改画布的地方
  *
  * 设计原则（ADR-0011）：
  *   1. 工具只通过 `@lingrui/knowledge` 改 Y.Doc，不直接碰画布（画布是派生的）。
@@ -25,7 +25,7 @@ import {
   type NodeKind,
   type RelationKind,
 } from "@lingrui/knowledge";
-import type { Action } from "@lingrui/anim";
+import { EMPHASIS_STYLES, type Action, type EmphasisStyle } from "@lingrui/anim";
 
 // ---------------------------------------------------------------------------
 // 入参
@@ -36,6 +36,8 @@ export interface SpawnNodeInput {
   kind: NodeKind;
   title: string;
   summary?: string;
+  /** 真实设备/网络图标（stencil key，如 net.firewall / rack.1u-rack-server） */
+  shape?: string;
   at: [number, number];
 }
 
@@ -44,6 +46,7 @@ export interface UpdateNodeInput {
   title?: string;
   summary?: string;
   kind?: NodeKind;
+  shape?: string;
 }
 
 export interface MoveNodeInput {
@@ -103,12 +106,29 @@ export interface FocusInput {
   nodeId: string;
 }
 
+export interface EmphasizeInput {
+  nodeId: string;
+  /** 手绘强调样式：圈 / 框 / 下划线 / 叉 / 高亮 */
+  style: EmphasisStyle;
+  text?: string;
+}
+
 export interface NarrateInput {
   text: string;
   nodeId?: string;
 }
 
+export interface LoadAssetInput {
+  /** 想谈的名词（标题 / 摘要 / 标签 / 类型模糊匹配） */
+  query: string;
+  /** 只在这些类型里找 */
+  kinds?: NodeKind[];
+  /** 最多返回几个候选（默认 6） */
+  limit?: number;
+}
+
 export type CanvasToolCall =
+  | { name: "loadAsset"; input: LoadAssetInput }
   | { name: "spawnNode"; input: SpawnNodeInput }
   | { name: "updateNode"; input: UpdateNodeInput }
   | { name: "moveNode"; input: MoveNodeInput }
@@ -118,6 +138,7 @@ export type CanvasToolCall =
   | { name: "setStyle"; input: SetStyleInput }
   | { name: "flow"; input: FlowInput }
   | { name: "focus"; input: FocusInput }
+  | { name: "emphasize"; input: EmphasizeInput }
   | { name: "narrate"; input: NarrateInput }
   | { name: "annotate"; input: AnnotateInput }
   | { name: "updateAnnotation"; input: UpdateAnnotationInput }
@@ -137,6 +158,8 @@ export interface ToolContext {
   doc: Y.Doc;
   /** 当前时间轴位置（秒） */
   t: number;
+  /** 当前概念画布 id（有的话，新建的 Annotation 归它，做到画布间隔离） */
+  canvasId?: string;
 }
 
 export interface ToolResult {
@@ -156,6 +179,8 @@ export interface ToolResult {
 
 export function executeTool(ctx: ToolContext, call: CanvasToolCall): ToolResult {
   switch (call.name) {
+    case "loadAsset":
+      return loadAsset(ctx, call.input);
     case "spawnNode":
       return spawnNode(ctx, call.input);
     case "updateNode":
@@ -174,6 +199,8 @@ export function executeTool(ctx: ToolContext, call: CanvasToolCall): ToolResult 
       return flow(ctx, call.input);
     case "focus":
       return focus(ctx, call.input);
+    case "emphasize":
+      return emphasize(ctx, call.input);
     case "narrate":
       return narrate(ctx, call.input);
     case "annotate":
@@ -234,6 +261,59 @@ const hold = (call: CanvasToolCall, reason: string, risk: RiskLevel): ToolResult
   pending: { call, reason },
 });
 
+/**
+ * 按需加载资产（ADR-0014 §5）：检索知识库字典，命中就引用而非新建。
+ * 检索字段：标题 / 摘要 / tags / 类型；回收站资产不命中。
+ */
+function loadAsset(ctx: ToolContext, input: LoadAssetInput): ToolResult {
+  const query = (input.query ?? "").trim().toLowerCase();
+  const limit = Math.max(1, Math.min(12, input.limit ?? 6));
+  const kinds = new Set(input.kinds ?? []);
+  const scored: Array<{ score: number; node: KnowledgeNode }> = [];
+
+  for (const node of getNodes(ctx.doc).values()) {
+    if (node.trashedAt) continue; // 回收站资产不参与加载
+    if (kinds.size > 0 && !kinds.has(node.kind)) continue;
+    const haystack = [node.title, node.summary ?? "", node.kind, ...(node.tags ?? [])]
+      .join(" ")
+      .toLowerCase();
+    if (!query) {
+      scored.push({ score: 0, node });
+      continue;
+    }
+    let score = 0;
+    if (node.title.toLowerCase() === query) score = 3;
+    else if (node.title.toLowerCase().includes(query)) score = 2;
+    else if (haystack.includes(query)) score = 1;
+    if (score > 0) scored.push({ score, node });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, limit);
+  const assets = top.map(({ node }) => {
+    const rawStyle = node.meta?.["style"];
+    return {
+      id: node.id,
+      kind: node.kind,
+      title: node.title,
+      summary: node.summary ?? "",
+      tags: node.tags ?? [],
+      shape: typeof node.meta?.["shape"] === "string" ? node.meta["shape"] : undefined,
+      style: typeof rawStyle === "object" && rawStyle !== null ? rawStyle : undefined,
+      relations: node.relations.map((r) => ({ to: r.to, kind: r.kind, label: r.label })),
+    };
+  });
+
+  if (assets.length === 0) {
+    return done(`字典里没有「${input.query}」相关的资产。需要的话用 spawnNode 新建一个（AI 初稿，人在资产卡审改）。`, "add");
+  }
+  return done(
+    `知识库命中 ${assets.length} 个资产：${JSON.stringify(assets)}` +
+      `\n优先复用已有资产的 id（spawnNode 用同 id，解释/形态/关系全部继承）；只有命名不一致时才新建。`,
+    "add",
+  );
+}
+
 function spawnNode(ctx: ToolContext, input: SpawnNodeInput): ToolResult {
   if (!input.id?.trim()) return fail("spawnNode 需要非空 id");
   if (!input.title?.trim()) return fail("spawnNode 需要非空 title");
@@ -247,6 +327,7 @@ function spawnNode(ctx: ToolContext, input: SpawnNodeInput): ToolResult {
     title: input.title,
     summary: input.summary,
     relations: existing?.relations ?? [],
+    ...(input.shape ? { meta: { ...(existing?.meta ?? {}), shape: input.shape } } : {}),
     // AI 新增的标 ai；如果人已经改过，保留人的标记
     provenance: isHumanOwned(existing) ? existing!.provenance : { origin: "ai", at: Date.now() },
   };
@@ -278,6 +359,7 @@ function updateNode(
     title: input.title ?? node.title,
     summary: input.summary ?? node.summary,
     kind: input.kind ?? node.kind,
+    ...(input.shape ? { meta: { ...(node.meta ?? {}), shape: input.shape } } : {}),
     provenance: { origin: "ai", at: Date.now() },
   });
 
@@ -413,6 +495,16 @@ function narrate(ctx: ToolContext, input: NarrateInput): ToolResult {
   ]);
 }
 
+/** 手绘强调：给节点画圈/框/下划线/叉/高亮，让讲解“当场圈重点” */
+function emphasize(ctx: ToolContext, input: EmphasizeInput): ToolResult {
+  const node = readNode(ctx.doc, input.nodeId);
+  if (!node) return fail(`节点不存在：${input.nodeId}`);
+  const style: EmphasisStyle = EMPHASIS_STYLES.includes(input.style) ? input.style : "circle";
+  return done(`强调「${node.title}」`, "add", [
+    { t: ctx.t, kind: "emphasize", nodeId: input.nodeId, style, text: input.text },
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Annotation 类工具（PRD/知识模型.md §2.3）
 // ---------------------------------------------------------------------------
@@ -443,6 +535,7 @@ function annotate(ctx: ToolContext, input: AnnotateInput): ToolResult {
   upsertAnnotation(ctx.doc, {
     id,
     type: input.type,
+    ...(ctx.canvasId ? { canvasId: ctx.canvasId } : {}),
     ...(input.attachedTo ? { attachedTo: input.attachedTo } : {}),
     element: input.element,
     ...(input.text ? { text: input.text } : {}),

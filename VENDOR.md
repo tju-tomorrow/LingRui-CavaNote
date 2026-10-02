@@ -15,9 +15,13 @@
 | 名称 | 用途 | 上游 repo | commit | 拷贝日期 | License | 已拷贝 | 已删除 |
 |---|---|---|---|---|---|---|---|
 | blocknote | 块编辑器 | https://github.com/TypeCellOS/BlockNote | `f64d5446e39d` | 2026-10-01 | MPL-2.0 / XL=GPL-3.0 | 整仓 | `docs` `tests` `examples` `playground` `scripts` `CHANGELOG` `CLA.md` `AGENTS.md` `CLAUDE.md` `pnpm-lock.yaml` `packages/mantine` `packages/ariakit` `packages/dev-scripts` |
-| excalidraw | 手绘画布 | https://github.com/excalidraw/excalidraw | `1919728724a1` | 2026-10-01 | MIT | `packages/{excalidraw,element,common,math,utils}` | 未拷贝 `excalidraw-app` `charts` `laser-pointer` `fractional-indexing` |
+| excalidraw | ~~手绘画布~~ **已退役**（[ADR-0013](docs/adr/0013-canvas-engine-maxgraph.md)：改用 `@maxgraph/core`） | https://github.com/excalidraw/excalidraw | `1919728724a1` | 2026-10-01 | MIT | `packages/{excalidraw,element,common,math,utils}` | 未拷贝 `excalidraw-app` `charts` `laser-pointer` `fractional-indexing` |
 | assistant-ui | AI 对话 UI | https://github.com/assistant-ui/assistant-ui | _待钉_ | — | MIT | — | — |
 | xyflow | 节点图 | https://github.com/xyflow/xyflow | _待钉_ | — | MIT | — | — |
+| drawio-stencils | 真机 / 网络设备 / 云 / 全量形状库 | https://github.com/jgraph/drawio | `dev` (2026-10-02) | 2026-10-02 | Apache-2.0（品牌图标含上游商标条款） | `src/main/webapp/stencils/**` 全套 204 个 XML（~42MB）→ `apps/web/public/stencils/` | — |
+| rough | 手绘风图形（图表表现力） | https://github.com/rough-stuff/rough | `56a2762171b1` | 2026-10-02 | MIT | 整仓 | 未裁 |
+| rough-notation | 手绘高亮 / 圈注（重点标注） | https://github.com/rough-stuff/rough-notation | `668ba82ac89c` | 2026-10-02 | MIT | 整仓 | 未裁 |
+| revideo | 程序化视频渲染（SceneScript → MP4，3b1b 风） | https://github.com/redotvideo/revideo | `b5de67a009a5` | 2026-10-02 | MIT | `packages/{2d,core,renderer,player,player-react,ffmpeg,ui,vite-plugin,cli,telemetry}` | 删 `packages/{docs,docs-redirect,e2e,examples,create,template}` |
 
 ### 裁减记录（BlockNote）
 
